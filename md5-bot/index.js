@@ -12,6 +12,7 @@ const cau11Master = require('./modules/cau-11-master');
 const cauNganDai = require('./modules/cau-ngan-dai');
 const brainAI = require('./modules/brain-ai');
 const deepseekAI = require('./modules/deepseek-ai');
+const expandedCauBank = require('./modules/expanded-cau-bank');
 const hybridFollowBreak = require('./modules/hybrid-follow-break');
 const onlineAIV3 = require('./modules/online-ai-v3');
 const patternAtlas = require('./modules/pattern-atlas');
@@ -159,8 +160,8 @@ function formatPrediction(prediction) {
 }
 
 // ===== ENSEMBLE =====
-const modules = [aiAdaptive, aiLogitV2, antiBias, beCauPro, cau11Master, cauNganDai, brainAI, deepseekAI, hybridFollowBreak, onlineAIV3, patternAtlas, patternRich, skipGram, smartBreakV2];
-const moduleNames = ['adaptive', 'logit', 'antiBias', 'beCau', 'cau11', 'cauNganDai', 'brain', 'deepseek', 'hybrid', 'online', 'atlas', 'rich', 'skipGram', 'smartBreak'];
+const modules = [aiAdaptive, aiLogitV2, antiBias, beCauPro, cau11Master, cauNganDai, brainAI, deepseekAI, expandedCauBank, hybridFollowBreak, onlineAIV3, patternAtlas, patternRich, skipGram, smartBreakV2];
+const moduleNames = ['adaptive', 'logit', 'antiBias', 'beCau', 'cau11', 'cauNganDai', 'brain', 'deepseek', 'expandedCau', 'hybrid', 'online', 'atlas', 'rich', 'skipGram', 'smartBreak'];
 const modulePerformance = {};
 
 function getModuleWeight(name) {
@@ -249,40 +250,9 @@ async function loadInitialHistory() {
     const data = await fetchData();
     if (!data || !data.length) return;
     data.sort((a, b) => (a.GameSessionID || 0) - (b.GameSessionID || 0));
-    let added = 0;
-    let corrected = 0;
-    for (const result of data.slice(-MAX_HISTORY)) {
-        const sessionId = String(result.GameSessionID);
-        const sum = Number(result.Dice1) + Number(result.Dice2) + Number(result.Dice3);
-        const outcome = getOutcome(result);
-        const existing = history.find(item => item.sessionId === sessionId);
-        if (existing) {
-            if (existing.outcome !== outcome || existing.sum !== sum) {
-                existing.dice = [result.Dice1, result.Dice2, result.Dice3];
-                existing.sum = sum;
-                existing.outcome = outcome;
-                corrected++;
-            }
-            continue;
-        }
-        history.push({
-            sessionId,
-            dice: [result.Dice1, result.Dice2, result.Dice3],
-            sum,
-            outcome,
-            pred: null,
-            signals: [],
-            receivedAt: new Date().toISOString(),
-        });
-        added++;
-    }
-    history.sort((a, b) => Number(a.sessionId) - Number(b.sessionId));
-    if (history.length > MAX_HISTORY) history = history.slice(-MAX_HISTORY);
-    brainAI.learn(history);
-    cauNganDai.learn(history);
-    lastSession = history.length ? Number(history[history.length - 1].sessionId) : null;
+    lastSession = Number(data[data.length - 1].GameSessionID);
     await saveData();
-    console.log(`✅ Nạp ${added} phiên, sửa ${corrected}. Não đã học ${history.length} phiên, mốc ${lastSession}.`);
+    console.log(`✅ Đã lấy mốc phiên ${lastSession}. Chờ 10 phiên mới trước khi dự đoán.`);
 }
 
 // ===== RUN =====
