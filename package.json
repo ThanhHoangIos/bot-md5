@@ -1,0 +1,12 @@
+{
+  "name": "md5-bot",
+  "version": "1.0.0",
+  "private": true,
+  "main": "md5-bot/index.js",
+  "scripts": {
+    "start": "node md5-bot/index.js"
+  },
+  "dependencies": {
+    "node-fetch": "^2.6.7"
+  }
+}

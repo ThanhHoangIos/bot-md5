@@ -20,7 +20,7 @@ const skipGram = require('./modules/skip-gram');
 const smartBreakV2 = require('./modules/smart-break-v2');
 
 // ===== CẤU HÌNH =====
-const TOKEN = process.env.MD5_API_TOKEN || 'skooN9TKlxJGxgSVRzGShapr6ZBSAyPSdm3g06QugeLZ50dsPLBpQlEj4B+PoU7gBTstsxc74ivQLUaZT8Iam17IkREb7Fn2Br3VwVNQi7qCKtzSMdI4BY3HL9I4VEaWdAVzeZkOxx6qpBbYiNGQbL+32FLTO1yQFoZcgcRwrk7Uerl7XUZ0xA==';
+const TOKEN = process.env.MD5_API_TOKEN || '';
 const API_URL = 'https://md5.changdelamgica.xyz/api/GetListSoiCau';
 const PORT = process.env.PORT || 3000;
 const STORAGE_FILE = 'data.json';
