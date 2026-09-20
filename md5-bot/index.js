@@ -24,6 +24,8 @@ const smartBreakV2 = require('./modules/smart-break-v2');
 const TOKEN = process.env.MD5_API_TOKEN || 'skooN9TKlxJGxgSVRzGShapr6ZBSAyPSdm3g06QugeLZ50dsPLBpQlEj4B+PoU7gBTstsxc74ivQLUaZT8Iam17IkREb7Fn2Br3VwVNQi7qCKtzSMdI4BY3HL9I4VEaWdAVzeZkOxx6qpBbYiNGQbL+32FLTO1yQFoZcgcRwrk7Uerl7XUZ0xA==';
 const API_URL = 'https://md5.changdelamgica.xyz/api/GetListSoiCau';
 const PORT = process.env.PORT || 3000;
+const SUPABASE_URL = process.env.SUPABASE_URL || 'https://mkcrlfgpncryalmmixsr.supabase.co';
+const SUPABASE_KEY = process.env.SUPABASE_KEY || '';
 const STORAGE_DIR = process.env.DATA_DIR || (fs.existsSync('/var/data') ? '/var/data' : __dirname);
 const STORAGE_FILE = process.env.DATA_FILE || path.join(STORAGE_DIR, 'data.json');
 const MAX_HISTORY = 2000;
@@ -36,35 +38,76 @@ let stats = { total: 0, tai: 0, xiu: 0, correct: 0, wrong: 0 };
 let isRunning = false;
 
 // ===== LƯU / TẢI =====
-function saveData() {
+function getState() {
+    return {
+        history: history.slice(-MAX_HISTORY),
+        stats, lastSession,
+        brainMemory: brainAI._memory,
+        brainPerformance: brainAI._performance,
+        brainWeights: brainAI._weights,
+        brainLastLearn: brainAI._lastLearn,
+        cauMemory: cauNganDai._memory,
+    };
+}
+
+function saveLocalData(state) {
     try {
         fs.mkdirSync(path.dirname(STORAGE_FILE), { recursive: true });
         const tempFile = `${STORAGE_FILE}.tmp`;
-        fs.writeFileSync(tempFile, JSON.stringify({
-            history: history.slice(-2000),
-            stats, lastSession,
-            brainMemory: brainAI._memory,
-            brainPerformance: brainAI._performance,
-            brainWeights: brainAI._weights,
-            brainLastLearn: brainAI._lastLearn,
-            cauMemory: cauNganDai._memory
-        }, null, 2));
+        fs.writeFileSync(tempFile, JSON.stringify(state, null, 2));
         fs.renameSync(tempFile, STORAGE_FILE);
     } catch (e) { console.error('❌ Lỗi lưu dữ liệu:', e.message); }
 }
 
-function loadData() {
+async function saveData() {
+    const state = getState();
+    saveLocalData(state);
+    if (!SUPABASE_KEY) return;
+    try {
+        const response = await fetch(`${SUPABASE_URL}/rest/v1/bot_state?on_conflict=id`, {
+            method: 'POST',
+            headers: {
+                apikey: SUPABASE_KEY,
+                Authorization: `Bearer ${SUPABASE_KEY}`,
+                'Content-Type': 'application/json',
+                Prefer: 'resolution=merge-duplicates',
+            },
+            body: JSON.stringify({ id: 1, state, updated_at: new Date().toISOString() }),
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    } catch (e) { console.error('❌ Lỗi lưu Supabase:', e.message); }
+}
+
+function applyState(d) {
+    history = (d.history || []).slice(-MAX_HISTORY);
+    stats = d.stats || { total: 0, tai: 0, xiu: 0, correct: 0, wrong: 0 };
+    lastSession = d.lastSession || null;
+    if (d.brainMemory) brainAI._memory = d.brainMemory;
+    if (d.brainPerformance) brainAI._performance = d.brainPerformance;
+    if (d.brainWeights) brainAI._weights = d.brainWeights;
+    if (Number.isInteger(d.brainLastLearn)) brainAI._lastLearn = d.brainLastLearn;
+    if (d.cauMemory) cauNganDai._memory = d.cauMemory;
+}
+
+async function loadData() {
+    if (SUPABASE_KEY) {
+        try {
+            const response = await fetch(`${SUPABASE_URL}/rest/v1/bot_state?id=eq.1&select=state`, {
+                headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` },
+            });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const rows = await response.json();
+            if (rows[0] && rows[0].state) {
+                applyState(rows[0].state);
+                saveLocalData(rows[0].state);
+                return true;
+            }
+        } catch (e) { console.error('❌ Lỗi đọc Supabase:', e.message); }
+    }
     try {
         if (!fs.existsSync(STORAGE_FILE)) return false;
         const d = JSON.parse(fs.readFileSync(STORAGE_FILE, 'utf8'));
-        history = (d.history || []).slice(-MAX_HISTORY);
-        stats = d.stats || { total: 0, tai: 0, xiu: 0, correct: 0, wrong: 0 };
-        lastSession = d.lastSession || null;
-        if (d.brainMemory) brainAI._memory = d.brainMemory;
-        if (d.brainPerformance) brainAI._performance = d.brainPerformance;
-        if (d.brainWeights) brainAI._weights = d.brainWeights;
-        if (Number.isInteger(d.brainLastLearn)) brainAI._lastLearn = d.brainLastLearn;
-        if (d.cauMemory) cauNganDai._memory = d.cauMemory;
+        applyState(d);
         return true;
     } catch (e) { return false; }
 }
@@ -178,7 +221,7 @@ async function loadInitialHistory() {
     if (!data || !data.length) return;
     data.sort((a, b) => (a.GameSessionID || 0) - (b.GameSessionID || 0));
     lastSession = Number(data[data.length - 1].GameSessionID);
-    saveData();
+    await saveData();
     console.log(`✅ Đã lấy mốc phiên ${lastSession}. Chờ 10 phiên mới trước khi dự đoán.`);
 }
 
@@ -218,7 +261,7 @@ async function run() {
             if (pred.pred) console.log(`🔮 Dự đoán: ${pred.pred} (${pred.confidence}%) | ${pred.reason}`);
             else console.log(`⏳ Chưa đủ dữ liệu (${history.length}/10)`);
         }
-        if (newResults.length) saveData();
+        if (newResults.length) await saveData();
     } catch (e) { console.error('❌ Lỗi run:', e.message); }
     finally { isRunning = false; }
 }
@@ -262,7 +305,7 @@ http.createServer((req, res) => {
 
 // ===== KHỞI ĐỘNG =====
 (async () => {
-    loadData();
+    await loadData();
     await loadInitialHistory();
     console.log('🚀 BOT 15 MODULE AI ĐANG CHẠY 24/7...');
     run();
