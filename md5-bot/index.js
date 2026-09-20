@@ -95,6 +95,24 @@ function formatPrediction(prediction) {
     return {
         success: true,
         data: {
+            previous: {
+                phien: last ? Number(last.sessionId) : null,
+                ket_qua: last ? (last.outcome === 'TAI' ? 'Tai' : 'Xiu') : null,
+                thoi_gian: last ? last.receivedAt : null,
+                tong: last ? last.sum : null,
+                xuc_xac_1: last ? last.dice[0] : null,
+                xuc_xac_2: last ? last.dice[1] : null,
+                xuc_xac_3: last ? last.dice[2] : null,
+            },
+            next: {
+                sid: nextSession,
+                ket_qua: outcome,
+                Confi: String(confidence),
+                status: 'wait_result',
+                model: 'Ensemble AI W6',
+                action: prediction.pred ? 'predict' : 'skip',
+                reason: prediction.reason,
+            },
             ket_qua: outcome,
             phien: last ? Number(last.sessionId) : null,
             thoi_gian: new Date().toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }),
