@@ -140,6 +140,7 @@ async function run() {
         if (history.length > 0) {
             const prev = history[history.length - 1];
             if (prev.pred) {
+                brainAI.recordFeedback(prev.pred, outcome);
                 if (prev.pred === outcome) { stats.correct++; console.log(`✅ Dự đoán trước (${prev.pred}) ĐÚNG`); }
                 else { stats.wrong++; console.log(`❌ Dự đoán trước (${prev.pred}) SAI`); }
             }
