@@ -73,6 +73,18 @@ function sendJson(res, statusCode, payload) {
     res.end(JSON.stringify(payload, null, 2));
 }
 
+function normalizeOutcome(value) {
+    const normalized = String(value || '').trim().toLowerCase();
+    if (['tai', 'tài', 'big'].includes(normalized)) return 'TAI';
+    if (['xiu', 'xỉu', 'xiū', 'small'].includes(normalized)) return 'XIU';
+    return null;
+}
+
+function getOutcome(result) {
+    return normalizeOutcome(result.KetQua || result.ket_qua || result.KETQUA)
+        || (Number(result.Dice1) + Number(result.Dice2) + Number(result.Dice3) > 10 ? 'TAI' : 'XIU');
+}
+
 function formatPrediction(prediction) {
     const last = history[history.length - 1];
     const nextSession = last ? Number(last.sessionId) + 1 : null;
@@ -92,6 +104,8 @@ function formatPrediction(prediction) {
             xuc_xac_3: dice[2],
             sid: nextSession,
             KetQua: outcome,
+            ket_qua_thuc_te: last ? (last.outcome === 'TAI' ? 'Tai' : 'Xiu') : null,
+            KetQuaThucTe: last ? (last.outcome === 'TAI' ? 'Tai' : 'Xiu') : null,
             Confi: String(confidence),
             status: 'wait_result',
             model: 'Ensemble AI W6',
@@ -160,11 +174,21 @@ async function loadInitialHistory() {
     if (!data || !data.length) return;
     data.sort((a, b) => (a.GameSessionID || 0) - (b.GameSessionID || 0));
     let added = 0;
+    let corrected = 0;
     for (const v of data) {
         const sid = String(v.GameSessionID);
-        if (history.some(h => h.sessionId === sid)) continue;
         const sum = Number(v.Dice1) + Number(v.Dice2) + Number(v.Dice3);
-        const outcome = sum > 10 ? 'TAI' : 'XIU';
+        const outcome = getOutcome(v);
+        const existing = history.find(item => item.sessionId === sid);
+        if (existing) {
+            if (existing.outcome !== outcome || existing.sum !== sum) {
+                existing.dice = [v.Dice1, v.Dice2, v.Dice3];
+                existing.sum = sum;
+                existing.outcome = outcome;
+                corrected++;
+            }
+            continue;
+        }
         const pred = ensemblePredict(history);
         history.push({ sessionId: sid, dice: [v.Dice1, v.Dice2, v.Dice3], sum, outcome, pred: pred.pred, receivedAt: new Date().toISOString() });
         added++;
@@ -172,7 +196,7 @@ async function loadInitialHistory() {
     if (history.length > 2000) history = history.slice(-2000);
     lastSession = history.length ? Number(history[history.length - 1].sessionId) : null;
     saveData();
-    console.log(`✅ Nạp ${added} ván. Tổng: ${history.length}`);
+    console.log(`✅ Nạp ${added} ván, sửa ${corrected} kết quả. Tổng: ${history.length}`);
 }
 
 // ===== RUN =====
@@ -187,7 +211,7 @@ async function run() {
         for (const result of newResults) {
             const sid = Number(result.GameSessionID);
             const sum = Number(result.Dice1) + Number(result.Dice2) + Number(result.Dice3);
-            const outcome = sum > 10 ? 'TAI' : 'XIU';
+            const outcome = getOutcome(result);
             const pred = ensemblePredict(history);
             stats.total++;
             if (outcome === 'TAI') stats.tai++; else stats.xiu++;
@@ -248,8 +272,7 @@ http.createServer((req, res) => {
 // ===== KHỞI ĐỘNG =====
 (async () => {
     loadData();
-    if (history.length === 0) await loadInitialHistory();
-    else console.log(`📂 Đã tải ${history.length} ván từ file.`);
+    await loadInitialHistory();
     console.log('🚀 BOT 15 MODULE AI ĐANG CHẠY 24/7...');
     run();
     setInterval(run, 1000);
