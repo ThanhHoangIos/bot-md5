@@ -73,6 +73,34 @@ function sendJson(res, statusCode, payload) {
     res.end(JSON.stringify(payload, null, 2));
 }
 
+function formatPrediction(prediction) {
+    const last = history[history.length - 1];
+    const nextSession = last ? Number(last.sessionId) + 1 : null;
+    const outcome = prediction.pred === 'TAI' ? 'Tai' : prediction.pred === 'XIU' ? 'Xiu' : null;
+    const dice = last ? last.dice : [null, null, null];
+    const confidence = Number(prediction.confidence || 0);
+
+    return {
+        success: true,
+        data: {
+            ket_qua: outcome,
+            phien: last ? Number(last.sessionId) : null,
+            thoi_gian: new Date().toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }),
+            tong: last ? last.sum : null,
+            xuc_xac_1: dice[0],
+            xuc_xac_2: dice[1],
+            xuc_xac_3: dice[2],
+            sid: nextSession,
+            KetQua: outcome,
+            Confi: String(confidence),
+            status: 'wait_result',
+            model: 'Ensemble AI W6',
+            action: prediction.pred ? 'predict' : 'skip',
+            reason: prediction.reason,
+        },
+    };
+}
+
 // ===== ENSEMBLE =====
 const modules = [aiAdaptive, aiLogitV2, antiBias, beCauPro, cau11Master, cauNganDai, brainAI, deepseekAI, hybridFollowBreak, onlineAIV3, patternAtlas, patternRich, skipGram, smartBreakV2];
 
@@ -203,7 +231,7 @@ http.createServer((req, res) => {
             const limit = Math.max(1, Math.min(Number.isFinite(requestedLimit) ? requestedLimit : 20, 2000));
             sendJson(res, 200, { results: history.slice(-limit), count: history.length });
         } else if (requestUrl.pathname === '/api/bot/predict') {
-            sendJson(res, 200, ensemblePredict(history));
+            sendJson(res, 200, formatPrediction(ensemblePredict(history)));
         } else if (requestUrl.pathname === '/api/bot/brain') {
             sendJson(res, 200, brainAI.getStats());
         } else if (requestUrl.pathname === '/api/bot/cau') {
