@@ -26,6 +26,8 @@ const API_URL = 'https://md5.changdelamgica.xyz/api/GetListSoiCau';
 const PORT = process.env.PORT || 3000;
 const STORAGE_DIR = process.env.DATA_DIR || (fs.existsSync('/var/data') ? '/var/data' : __dirname);
 const STORAGE_FILE = process.env.DATA_FILE || path.join(STORAGE_DIR, 'data.json');
+const MAX_HISTORY = 2000;
+const PRUNE_COUNT = 200;
 
 let history = [];
 let lastSession = null;
@@ -54,7 +56,7 @@ function loadData() {
     try {
         if (!fs.existsSync(STORAGE_FILE)) return false;
         const d = JSON.parse(fs.readFileSync(STORAGE_FILE, 'utf8'));
-        history = d.history || [];
+        history = (d.history || []).slice(-MAX_HISTORY);
         stats = d.stats || { total: 0, tai: 0, xiu: 0, correct: 0, wrong: 0 };
         lastSession = d.lastSession || null;
         if (d.brainMemory) brainAI._memory = d.brainMemory;
@@ -194,7 +196,7 @@ async function loadInitialHistory() {
         history.push({ sessionId: sid, dice: [v.Dice1, v.Dice2, v.Dice3], sum, outcome, pred: pred.pred, receivedAt: new Date().toISOString() });
         added++;
     }
-    if (history.length > 2000) history = history.slice(-2000);
+    if (history.length > MAX_HISTORY) history = history.slice(-MAX_HISTORY);
     lastSession = history.length ? Number(history[history.length - 1].sessionId) : null;
     saveData();
     console.log(`✅ Nạp ${added} ván, sửa ${corrected} kết quả. Tổng: ${history.length}`);
@@ -227,7 +229,10 @@ async function run() {
             }
 
             history.push({ sessionId: String(sid), dice: [result.Dice1, result.Dice2, result.Dice3], sum, outcome, pred: pred.pred, receivedAt: new Date().toISOString() });
-            if (history.length > 2000) history.shift();
+            if (history.length > MAX_HISTORY) {
+                history.splice(0, PRUNE_COUNT);
+                console.log(`🧹 Đã xóa ${PRUNE_COUNT} phiên cũ. Còn lại ${history.length} phiên.`);
+            }
             lastSession = sid;
             console.log(`🎯 Ván ${sid}: ${result.Dice1}-${result.Dice2}-${result.Dice3} = ${sum} (${outcome})`);
             if (pred.pred) console.log(`🔮 Dự đoán: ${pred.pred} (${pred.confidence}%) | ${pred.reason}`);
