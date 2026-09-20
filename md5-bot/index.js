@@ -176,30 +176,9 @@ async function loadInitialHistory() {
     const data = await fetchData();
     if (!data || !data.length) return;
     data.sort((a, b) => (a.GameSessionID || 0) - (b.GameSessionID || 0));
-    let added = 0;
-    let corrected = 0;
-    for (const v of data) {
-        const sid = String(v.GameSessionID);
-        const sum = Number(v.Dice1) + Number(v.Dice2) + Number(v.Dice3);
-        const outcome = getOutcome(v);
-        const existing = history.find(item => item.sessionId === sid);
-        if (existing) {
-            if (existing.outcome !== outcome || existing.sum !== sum) {
-                existing.dice = [v.Dice1, v.Dice2, v.Dice3];
-                existing.sum = sum;
-                existing.outcome = outcome;
-                corrected++;
-            }
-            continue;
-        }
-        const pred = ensemblePredict(history);
-        history.push({ sessionId: sid, dice: [v.Dice1, v.Dice2, v.Dice3], sum, outcome, pred: pred.pred, receivedAt: new Date().toISOString() });
-        added++;
-    }
-    if (history.length > MAX_HISTORY) history = history.slice(-MAX_HISTORY);
-    lastSession = history.length ? Number(history[history.length - 1].sessionId) : null;
+    lastSession = Number(data[data.length - 1].GameSessionID);
     saveData();
-    console.log(`✅ Nạp ${added} ván, sửa ${corrected} kết quả. Tổng: ${history.length}`);
+    console.log(`✅ Đã lấy mốc phiên ${lastSession}. Chờ 10 phiên mới trước khi dự đoán.`);
 }
 
 // ===== RUN =====
