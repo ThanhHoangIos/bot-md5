@@ -249,9 +249,40 @@ async function loadInitialHistory() {
     const data = await fetchData();
     if (!data || !data.length) return;
     data.sort((a, b) => (a.GameSessionID || 0) - (b.GameSessionID || 0));
-    lastSession = Number(data[data.length - 1].GameSessionID);
+    let added = 0;
+    let corrected = 0;
+    for (const result of data.slice(-MAX_HISTORY)) {
+        const sessionId = String(result.GameSessionID);
+        const sum = Number(result.Dice1) + Number(result.Dice2) + Number(result.Dice3);
+        const outcome = getOutcome(result);
+        const existing = history.find(item => item.sessionId === sessionId);
+        if (existing) {
+            if (existing.outcome !== outcome || existing.sum !== sum) {
+                existing.dice = [result.Dice1, result.Dice2, result.Dice3];
+                existing.sum = sum;
+                existing.outcome = outcome;
+                corrected++;
+            }
+            continue;
+        }
+        history.push({
+            sessionId,
+            dice: [result.Dice1, result.Dice2, result.Dice3],
+            sum,
+            outcome,
+            pred: null,
+            signals: [],
+            receivedAt: new Date().toISOString(),
+        });
+        added++;
+    }
+    history.sort((a, b) => Number(a.sessionId) - Number(b.sessionId));
+    if (history.length > MAX_HISTORY) history = history.slice(-MAX_HISTORY);
+    brainAI.learn(history);
+    cauNganDai.learn(history);
+    lastSession = history.length ? Number(history[history.length - 1].sessionId) : null;
     await saveData();
-    console.log(`✅ Đã lấy mốc phiên ${lastSession}. Chờ 10 phiên mới trước khi dự đoán.`);
+    console.log(`✅ Nạp ${added} phiên, sửa ${corrected}. Não đã học ${history.length} phiên, mốc ${lastSession}.`);
 }
 
 // ===== RUN =====
