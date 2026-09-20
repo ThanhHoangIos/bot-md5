@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MD5 Bot Dashboard</title>
+<style>
+*{box-sizing:border-box;margin:0}body{background:#05080f;color:#e2e8f0;font:14px system-ui,sans-serif;min-height:100vh;padding:12px}.wrap{max-width:600px;margin:auto}.header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}.brand{font-size:20px;font-weight:800;color:#22d3ee}.online{color:#4ade80;font-size:12px}.dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:#4ade80;box-shadow:0 0 12px #4ade80;margin-right:5px}.card,.stat{background:#0f172a;border:1px solid #1e293b;border-radius:12px}.card{padding:16px;margin-bottom:12px}.dice-row{display:flex;justify-content:center;gap:14px;margin:12px}.dice{width:60px;height:60px;border-radius:14px;display:grid;place-items:center;font-size:26px;font-weight:800;background:#1a2236;border:2px solid #2a3a4a}.dice.tai{border-color:#4ade80;color:#4ade80;background:#0a2a1a}.dice.xiu{border-color:#f87171;color:#f87171;background:#2a0a0a}.result{text-align:center;font-size:22px;font-weight:800}.tai{color:#4ade80}.xiu{color:#f87171}.session{text-align:center;color:#64748b;font-size:12px;margin-top:4px}.pred-box{background:#0a0f1a;border-radius:10px;text-align:center;padding:12px;margin-top:10px}.label{font-size:11px;color:#64748b;letter-spacing:1px}.pred{font-size:32px;font-weight:800;margin:4px}.wait{color:#fbbf24;font-size:20px}.muted{color:#94a3b8;font-size:12px}.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0}.stat{text-align:center;padding:10px}.num{font-size:22px;font-weight:700}.cyan{color:#22d3ee}.history{max-height:400px;overflow:auto}.row{display:grid;grid-template-columns:75px 1fr 50px 42px;gap:8px;align-items:center;padding:10px 0;border-bottom:1px solid #1a2438;font-size:13px}.row:last-child{border:0}.h-session{color:#94a3b8;font-weight:600}.h-pred,.h-status{text-align:center;font-weight:700;font-size:11px}.status{text-align:center;color:#fbbf24;font-size:12px;margin-top:8px}
+</style>
+</head>
+<body><main class="wrap">
+<header class="header"><span class="brand">MD5 BOT</span><span class="online"><i class="dot"></i>Online</span></header>
+<section class="card"><div class="dice-row"><div class="dice" id="d1">-</div><div class="dice" id="d2">-</div><div class="dice" id="d3">-</div></div><div class="result" id="result">---</div><div class="session" id="session">#---</div><div class="pred-box"><div class="label">DỰ ĐOÁN VÁN TIẾP</div><div class="pred wait" id="prediction">---</div><div class="muted" id="confidence">Đang phân tích...</div></div></section>
+<section class="stats"><div class="stat"><div class="num cyan" id="total">0</div><div class="label">Tổng ván</div></div><div class="stat"><div class="num tai" id="correct">0</div><div class="label">Đúng</div></div><div class="stat"><div class="num xiu" id="wrong">0</div><div class="label">Sai</div></div></section>
+<section class="card"><div class="label" style="margin-bottom:8px">LỊCH SỬ 20 VÁN GẦN NHẤT</div><div class="history" id="history">Đang tải...</div><div class="status" id="status">Đang kết nối...</div></section>
+</main>
+<script>
+const byId=id=>document.getElementById(id);
+async function load(){
+ try{
+  const [statusRes,resultsRes]=await Promise.all([fetch('/api/bot/status',{cache:'no-store'}),fetch('/api/bot/results?limit=20',{cache:'no-store'})]);
+  const status=await statusRes.json(), results=(await resultsRes.json()).results||[], last=status.lastResult;
+  if(last){[last.dice[0],last.dice[1],last.dice[2]].forEach((value,i)=>{const el=byId('d'+(i+1));el.textContent=value;el.className='dice '+(last.outcome==='TAI'?'tai':'xiu')});byId('result').textContent=`${last.outcome==='TAI'?'Tài':'Xỉu'} (${last.sum})`;byId('result').className='result '+(last.outcome==='TAI'?'tai':'xiu');byId('session').textContent='#'+status.lastSession}
+  const p=status.prediction;byId('prediction').textContent=p?.pred?(p.pred==='TAI'?'Tài':'Xỉu'):'Chưa đủ dữ liệu';byId('prediction').className='pred '+(p?.pred?(p.pred==='TAI'?'tai':'xiu'):'wait');byId('confidence').textContent=p?.pred?`Tin cậy ${p.confidence}% · ${p.strength||''}`:'Đang phân tích...';
+  let correct=0,wrong=0;results.forEach(r=>{if(r.pred)(r.pred===r.outcome?correct++:wrong++)});byId('total').textContent=status.historyCount;byId('correct').textContent=correct;byId('wrong').textContent=wrong;
+  byId('history').innerHTML=results.slice().reverse().map(r=>{const actual=r.outcome==='TAI'?'Tài':'Xỉu',pred=r.pred?(r.pred==='TAI'?'Tài':'Xỉu'):'---',ok=r.pred&&r.pred===r.outcome;return `<div class="row"><span class="h-session">#${r.sessionId}</span><span>${r.dice.join('-')} = <b class="${r.outcome==='TAI'?'tai':'xiu'}">${actual}</b></span><span class="h-pred ${r.pred==='TAI'?'tai':r.pred==='XIU'?'xiu':''}">${pred}</span><span class="h-status ${r.pred?(ok?'tai':'xiu'):''}">${r.pred?(ok?'ĐÚNG':'SAI'):''}</span></div>`}).join('')||'Chưa có dữ liệu';byId('status').textContent='Cập nhật '+new Date().toLocaleTimeString('vi-VN');
+ }catch(error){byId('status').textContent='Không kết nối được API';console.error(error)}
+}
+load();setInterval(load,1000);
+</script></body></html>

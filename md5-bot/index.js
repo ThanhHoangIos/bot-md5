@@ -244,7 +244,12 @@ http.createServer((req, res) => {
     try {
         const requestUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
 
-        if (requestUrl.pathname === '/api/bot/status') {
+        if (requestUrl.pathname === '/') {
+            res.statusCode = 200;
+            res.setHeader('Content-Type', 'text/html; charset=utf-8');
+            res.setHeader('Cache-Control', 'no-store');
+            res.end(fs.readFileSync(path.join(__dirname, 'dashboard.html'), 'utf8'));
+        } else if (requestUrl.pathname === '/api/bot/status') {
             const pred = ensemblePredict(history);
             sendJson(res, 200, {
                 status: 'running', lastSession,
