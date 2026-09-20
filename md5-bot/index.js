@@ -47,6 +47,7 @@ function getState() {
         brainWeights: brainAI._weights,
         brainLastLearn: brainAI._lastLearn,
         cauMemory: cauNganDai._memory,
+        modulePerformance,
     };
 }
 
@@ -87,6 +88,7 @@ function applyState(d) {
     if (d.brainWeights) brainAI._weights = d.brainWeights;
     if (Number.isInteger(d.brainLastLearn)) brainAI._lastLearn = d.brainLastLearn;
     if (d.cauMemory) cauNganDai._memory = d.cauMemory;
+    if (d.modulePerformance) Object.assign(modulePerformance, d.modulePerformance);
 }
 
 async function loadData() {
@@ -158,6 +160,25 @@ function formatPrediction(prediction) {
 
 // ===== ENSEMBLE =====
 const modules = [aiAdaptive, aiLogitV2, antiBias, beCauPro, cau11Master, cauNganDai, brainAI, deepseekAI, hybridFollowBreak, onlineAIV3, patternAtlas, patternRich, skipGram, smartBreakV2];
+const moduleNames = ['adaptive', 'logit', 'antiBias', 'beCau', 'cau11', 'cauNganDai', 'brain', 'deepseek', 'hybrid', 'online', 'atlas', 'rich', 'skipGram', 'smartBreak'];
+const modulePerformance = {};
+
+function getModuleWeight(name) {
+    const performance = modulePerformance[name] || { hits: 0, misses: 0 };
+    const total = performance.hits + performance.misses;
+    const accuracy = (performance.hits + 5) / (total + 10);
+    return Math.max(0.5, Math.min(1.5, 0.5 + accuracy));
+}
+
+function recordModuleFeedback(signals, actual) {
+    for (const signal of signals || []) {
+        if (!signal.pred) continue;
+        const performance = modulePerformance[signal.name] || { hits: 0, misses: 0 };
+        if (signal.pred === actual) performance.hits++;
+        else performance.misses++;
+        modulePerformance[signal.name] = performance;
+    }
+}
 
 function ensemblePredict(h) {
     if (h.length < WARMUP_ROUNDS) return { pred: null, confidence: 0, reason: `Đang học ${h.length}/${WARMUP_ROUNDS} phiên` };
@@ -165,12 +186,16 @@ function ensemblePredict(h) {
     const reasons = [];
     let active = 0;
     const votes = { TAI: 0, XIU: 0 };
-    for (const mod of modules) {
+    const signals = [];
+    for (let index = 0; index < modules.length; index++) {
+        const mod = modules[index];
+        const name = moduleNames[index];
         try {
             const res = mod.analyze(h);
             if (res && res.pred) {
-                scores[res.pred] += res.score;
+                scores[res.pred] += res.score * getModuleWeight(name);
                 votes[res.pred]++;
+                signals.push({ name, pred: res.pred });
                 if (res.reason) reasons.push(res.reason);
                 active++;
             }
@@ -192,14 +217,18 @@ function ensemblePredict(h) {
             scores,
             active,
             votes,
+            signals,
         };
     }
     const diff = Math.abs(scores.TAI - scores.XIU);
     const dominantVotes = votes[pred];
     const agreement = active ? dominantVotes / active : 0;
-    const confidence = Math.min(50 + diff * 6 + Math.max(0, agreement - 0.5) * 30, 95);
+    const totalFeedback = Object.values(modulePerformance).reduce((sum, item) => sum + item.hits + item.misses, 0);
+    const feedbackAccuracy = totalFeedback ? Object.values(modulePerformance).reduce((sum, item) => sum + item.hits, 0) / totalFeedback : 0.5;
+    const calibratedCap = totalFeedback >= 20 ? Math.round(50 + Math.max(0, feedbackAccuracy - 0.5) * 70) : 65;
+    const confidence = Math.min(50 + diff * 6 + Math.max(0, agreement - 0.5) * 30, calibratedCap, 85);
     const strength = active >= 4 && agreement >= 0.65 && confidence >= 70 ? 'strong' : agreement >= 0.5 ? 'medium' : 'weak';
-    return { pred, confidence: Math.round(confidence), strength, agreement: Math.round(agreement * 100), reason: reasons.slice(0, 3).join(' | ') + ` | ${regime} | ${strength} (${dominantVotes}/${active})`, scores, active, votes };
+    return { pred, confidence: Math.round(confidence), strength, agreement: Math.round(agreement * 100), reason: reasons.slice(0, 3).join(' | ') + ` | ${regime} | ${strength} (${dominantVotes}/${active})`, scores, active, votes, signals };
 }
 
 // ===== FETCH =====
@@ -246,12 +275,13 @@ async function run() {
                 const prev = history[history.length - 1];
                 if (prev.pred) {
                     brainAI.recordFeedback(prev.pred, outcome);
+                    recordModuleFeedback(prev.signals, outcome);
                     if (prev.pred === outcome) stats.correct++;
                     else stats.wrong++;
                 }
             }
 
-            history.push({ sessionId: String(sid), dice: [result.Dice1, result.Dice2, result.Dice3], sum, outcome, pred: pred.pred, receivedAt: new Date().toISOString() });
+            history.push({ sessionId: String(sid), dice: [result.Dice1, result.Dice2, result.Dice3], sum, outcome, pred: pred.pred, signals: pred.signals || [], receivedAt: new Date().toISOString() });
             if (history.length > MAX_HISTORY) {
                 history.splice(0, PRUNE_COUNT);
                 console.log(`🧹 Đã xóa ${PRUNE_COUNT} phiên cũ. Còn lại ${history.length} phiên.`);
