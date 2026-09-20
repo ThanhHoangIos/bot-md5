@@ -89,10 +89,31 @@ function formatPrediction(prediction) {
     const last = history[history.length - 1];
     const nextSession = last ? Number(last.sessionId) + 1 : null;
     const outcome = prediction.pred === 'TAI' ? 'Tai' : prediction.pred === 'XIU' ? 'Xiu' : null;
+    const actualOutcome = last ? (last.outcome === 'TAI' ? 'Tai' : 'Xiu') : null;
     const dice = last ? last.dice : [null, null, null];
     const confidence = Number(prediction.confidence || 0);
+    const total = stats.correct + stats.wrong;
 
     return {
+        ResponseData: 1,
+        Phien: last ? Number(last.sessionId) : null,
+        Xuc_xac_1: dice[0],
+        Xuc_xac_2: dice[1],
+        Xuc_xac_3: dice[2],
+        Ket_qua: actualOutcome || '',
+        Phien_hien_tai: nextSession,
+        Du_doan: outcome || '',
+        Loai_cau: prediction.pred ? 'Ensemble' : '',
+        Mau_cau_phat_hien: prediction.reason || '',
+        Do_tin_cay: `${confidence}%`,
+        Trang_thai: prediction.pred ? 'wait_result' : 'waiting_data',
+        Ket_qua_du_doan: outcome || '',
+        Thong_ke: {
+            tong: stats.total,
+            dung: stats.correct,
+            sai: stats.wrong,
+            ti_le: `${total ? Math.round((stats.correct / total) * 100) : 0}%`,
+        },
         success: true,
         data: {
             previous: {
