@@ -35,6 +35,7 @@ let isRunning = false;
 // ===== LƯU / TẢI =====
 function saveData() {
     try {
+        fs.mkdirSync(path.dirname(STORAGE_FILE), { recursive: true });
         const tempFile = `${STORAGE_FILE}.tmp`;
         fs.writeFileSync(tempFile, JSON.stringify({
             history: history.slice(-2000),
@@ -48,6 +49,7 @@ function saveData() {
         fs.renameSync(tempFile, STORAGE_FILE);
     } catch (e) { console.error('❌ Lỗi lưu dữ liệu:', e.message); }
 }
+
 function loadData() {
     try {
         if (!fs.existsSync(STORAGE_FILE)) return false;
@@ -62,6 +64,13 @@ function loadData() {
         if (d.cauMemory) cauNganDai._memory = d.cauMemory;
         return true;
     } catch (e) { return false; }
+}
+
+function sendJson(res, statusCode, payload) {
+    res.statusCode = statusCode;
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-store');
+    res.end(JSON.stringify(payload, null, 2));
 }
 
 // ===== ENSEMBLE =====
@@ -167,28 +176,33 @@ async function run() {
 
 // ===== SERVER =====
 http.createServer((req, res) => {
-    res.setHeader('Content-Type', 'application/json');
     res.setHeader('Access-Control-Allow-Origin', '*');
-    const url = req.url;
+    try {
+        const requestUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
 
-    if (url === '/api/bot/status') {
-        const pred = ensemblePredict(history);
-        res.end(JSON.stringify({
-            status: 'running', lastSession,
-            lastResult: history.length ? { dice: history[history.length - 1].dice, sum: history[history.length - 1].sum, outcome: history[history.length - 1].outcome } : null,
-            stats, prediction: pred, historyCount: history.length
-        }));
-    } else if (url.startsWith('/api/bot/results')) {
-        const limit = parseInt(url.split('limit=')[1]) || 20;
-        res.end(JSON.stringify({ results: history.slice(-limit), count: history.length }));
-    } else if (url === '/api/bot/predict') {
-        res.end(JSON.stringify(ensemblePredict(history)));
-    } else if (url === '/api/bot/brain') {
-        res.end(JSON.stringify(brainAI.getStats()));
-    } else if (url === '/api/bot/cau') {
-        res.end(JSON.stringify(cauNganDai.getStats()));
-    } else {
-        res.end(JSON.stringify({ status: 'running', historyCount: history.length }));
+        if (requestUrl.pathname === '/api/bot/status') {
+            const pred = ensemblePredict(history);
+            sendJson(res, 200, {
+                status: 'running', lastSession,
+                lastResult: history.length ? { dice: history[history.length - 1].dice, sum: history[history.length - 1].sum, outcome: history[history.length - 1].outcome } : null,
+                stats, prediction: pred, historyCount: history.length
+            });
+        } else if (requestUrl.pathname === '/api/bot/results') {
+            const requestedLimit = Number.parseInt(requestUrl.searchParams.get('limit'), 10);
+            const limit = Math.max(1, Math.min(Number.isFinite(requestedLimit) ? requestedLimit : 20, 2000));
+            sendJson(res, 200, { results: history.slice(-limit), count: history.length });
+        } else if (requestUrl.pathname === '/api/bot/predict') {
+            sendJson(res, 200, ensemblePredict(history));
+        } else if (requestUrl.pathname === '/api/bot/brain') {
+            sendJson(res, 200, brainAI.getStats());
+        } else if (requestUrl.pathname === '/api/bot/cau') {
+            sendJson(res, 200, cauNganDai.getStats());
+        } else {
+            sendJson(res, 200, { status: 'running', historyCount: history.length });
+        }
+    } catch (error) {
+        console.error('❌ Lỗi HTTP:', error.message);
+        sendJson(res, 500, { status: 'error', error: 'Internal server error' });
     }
 }).listen(PORT, () => console.log('✅ Server chạy port ' + PORT));
 
