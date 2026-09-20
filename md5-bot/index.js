@@ -24,7 +24,8 @@ const smartBreakV2 = require('./modules/smart-break-v2');
 const TOKEN = process.env.MD5_API_TOKEN || 'skooN9TKlxJGxgSVRzGShapr6ZBSAyPSdm3g06QugeLZ50dsPLBpQlEj4B+PoU7gBTstsxc74ivQLUaZT8Iam17IkREb7Fn2Br3VwVNQi7qCKtzSMdI4BY3HL9I4VEaWdAVzeZkOxx6qpBbYiNGQbL+32FLTO1yQFoZcgcRwrk7Uerl7XUZ0xA==';
 const API_URL = 'https://md5.changdelamgica.xyz/api/GetListSoiCau';
 const PORT = process.env.PORT || 3000;
-const STORAGE_FILE = process.env.DATA_FILE || path.join(__dirname, 'data.json');
+const STORAGE_DIR = process.env.DATA_DIR || (fs.existsSync('/var/data') ? '/var/data' : __dirname);
+const STORAGE_FILE = process.env.DATA_FILE || path.join(STORAGE_DIR, 'data.json');
 
 let history = [];
 let lastSession = null;
@@ -39,6 +40,9 @@ function saveData() {
             history: history.slice(-2000),
             stats, lastSession,
             brainMemory: brainAI._memory,
+            brainPerformance: brainAI._performance,
+            brainWeights: brainAI._weights,
+            brainLastLearn: brainAI._lastLearn,
             cauMemory: cauNganDai._memory
         }, null, 2));
         fs.renameSync(tempFile, STORAGE_FILE);
@@ -52,6 +56,9 @@ function loadData() {
         stats = d.stats || { total: 0, tai: 0, xiu: 0, correct: 0, wrong: 0 };
         lastSession = d.lastSession || null;
         if (d.brainMemory) brainAI._memory = d.brainMemory;
+        if (d.brainPerformance) brainAI._performance = d.brainPerformance;
+        if (d.brainWeights) brainAI._weights = d.brainWeights;
+        if (Number.isInteger(d.brainLastLearn)) brainAI._lastLearn = d.brainLastLearn;
         if (d.cauMemory) cauNganDai._memory = d.cauMemory;
         return true;
     } catch (e) { return false; }
