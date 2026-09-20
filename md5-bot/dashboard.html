@@ -12,18 +12,18 @@
 <header class="header"><span class="brand">MD5 BOT</span><span class="online"><i class="dot"></i>Online</span></header>
 <section class="card"><div class="dice-row"><div class="dice" id="d1">-</div><div class="dice" id="d2">-</div><div class="dice" id="d3">-</div></div><div class="result" id="result">---</div><div class="session" id="session">#---</div><div class="pred-box"><div class="label">DỰ ĐOÁN VÁN TIẾP</div><div class="pred wait" id="prediction">---</div><div class="muted" id="confidence">Đang phân tích...</div></div></section>
 <section class="stats"><div class="stat"><div class="num cyan" id="total">0</div><div class="label">Tổng ván</div></div><div class="stat"><div class="num tai" id="correct">0</div><div class="label">Đúng</div></div><div class="stat"><div class="num xiu" id="wrong">0</div><div class="label">Sai</div></div></section>
-<section class="card"><div class="label" style="margin-bottom:8px">LỊCH SỬ 20 VÁN GẦN NHẤT</div><div class="history" id="history">Đang tải...</div><div class="status" id="status">Đang kết nối...</div></section>
+<section class="card"><div class="label" style="margin-bottom:8px">TOÀN BỘ LỊCH SỬ ĐÃ LƯU</div><div class="history" id="history">Đang tải...</div><div class="status" id="status">Đang kết nối...</div></section>
 </main>
 <script>
 const byId=id=>document.getElementById(id);
 async function load(){
  try{
-  const [statusRes,resultsRes]=await Promise.all([fetch('/api/bot/status',{cache:'no-store'}),fetch('/api/bot/results?limit=20',{cache:'no-store'})]);
+    const [statusRes,resultsRes]=await Promise.all([fetch('/api/bot/status',{cache:'no-store'}),fetch('/api/bot/results?limit=2000',{cache:'no-store'})]);
   const status=await statusRes.json(), results=(await resultsRes.json()).results||[], last=status.lastResult;
   if(last){[last.dice[0],last.dice[1],last.dice[2]].forEach((value,i)=>{const el=byId('d'+(i+1));el.textContent=value;el.className='dice '+(last.outcome==='TAI'?'tai':'xiu')});byId('result').textContent=`${last.outcome==='TAI'?'Tài':'Xỉu'} (${last.sum})`;byId('result').className='result '+(last.outcome==='TAI'?'tai':'xiu');byId('session').textContent='#'+status.lastSession}
   const p=status.prediction;byId('prediction').textContent=p?.pred?(p.pred==='TAI'?'Tài':'Xỉu'):'Chưa đủ dữ liệu';byId('prediction').className='pred '+(p?.pred?(p.pred==='TAI'?'tai':'xiu'):'wait');byId('confidence').textContent=p?.pred?`Tin cậy ${p.confidence}% · ${p.strength||''}`:'Đang phân tích...';
   let correct=0,wrong=0;results.forEach(r=>{if(r.pred)(r.pred===r.outcome?correct++:wrong++)});byId('total').textContent=status.historyCount;byId('correct').textContent=correct;byId('wrong').textContent=wrong;
-  byId('history').innerHTML=results.slice().reverse().map(r=>{const actual=r.outcome==='TAI'?'Tài':'Xỉu',pred=r.pred?(r.pred==='TAI'?'Tài':'Xỉu'):'---',ok=r.pred&&r.pred===r.outcome;return `<div class="row"><span class="h-session">#${r.sessionId}</span><span>${r.dice.join('-')} = <b class="${r.outcome==='TAI'?'tai':'xiu'}">${actual}</b></span><span class="h-pred ${r.pred==='TAI'?'tai':r.pred==='XIU'?'xiu':''}">${pred}</span><span class="h-status ${r.pred?(ok?'tai':'xiu'):''}">${r.pred?(ok?'ĐÚNG':'SAI'):''}</span></div>`}).join('')||'Chưa có dữ liệu';byId('status').textContent='Cập nhật '+new Date().toLocaleTimeString('vi-VN');
+  byId('history').innerHTML=results.filter(r=>r.pred).slice().reverse().map(r=>{const actual=r.outcome==='TAI'?'Tài':'Xỉu',pred=r.pred==='TAI'?'Tài':'Xỉu',ok=r.pred===r.outcome;return `<div class="row"><span class="h-session">#${r.sessionId}</span><span>${r.dice.join('-')} = <b class="${r.outcome==='TAI'?'tai':'xiu'}">${actual}</b></span><span class="h-pred ${r.pred==='TAI'?'tai':'xiu'}">${pred}</span><span class="h-status ${ok?'tai':'xiu'}">${ok?'ĐÚNG':'SAI'}</span></div>`}).join('')||'Chưa có phiên đã dự đoán';byId('status').textContent='Cập nhật '+new Date().toLocaleTimeString('vi-VN');
  }catch(error){byId('status').textContent='Không kết nối được API';console.error(error)}
 }
 load();setInterval(load,1000);
