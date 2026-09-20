@@ -93,7 +93,21 @@ function ensemblePredict(h) {
     }
     const regime = regimeDetector.detect(h);
     const pred = scores.TAI > scores.XIU ? 'TAI' : (scores.XIU > scores.TAI ? 'XIU' : null);
-    if (!pred) return { pred: null, confidence: 0, reason: `Không tín hiệu | ${regime} | ${active} modules` };
+    if (!pred) {
+        const recent = h.slice(-10).map(item => item.outcome);
+        const tai = recent.filter(outcome => outcome === 'TAI').length;
+        const xiu = recent.length - tai;
+        const fallback = tai === xiu
+            ? (recent[recent.length - 1] === 'TAI' ? 'XIU' : 'TAI')
+            : (tai < xiu ? 'TAI' : 'XIU');
+        return {
+            pred: fallback,
+            confidence: 50,
+            reason: `Fallback cân bằng | ${regime} | ${active} modules`,
+            scores,
+            active,
+        };
+    }
     const diff = Math.abs(scores.TAI - scores.XIU);
     const confidence = Math.min(50 + diff * 8, 95);
     return { pred, confidence: Math.round(confidence), reason: reasons.slice(0, 3).join(' | ') + ' | ' + regime, scores, active };
@@ -123,7 +137,8 @@ async function loadInitialHistory() {
         if (history.some(h => h.sessionId === sid)) continue;
         const sum = Number(v.Dice1) + Number(v.Dice2) + Number(v.Dice3);
         const outcome = sum > 10 ? 'TAI' : 'XIU';
-        history.push({ sessionId: sid, dice: [v.Dice1, v.Dice2, v.Dice3], sum, outcome, pred: null, receivedAt: new Date().toISOString() });
+        const pred = ensemblePredict(history);
+        history.push({ sessionId: sid, dice: [v.Dice1, v.Dice2, v.Dice3], sum, outcome, pred: pred.pred, receivedAt: new Date().toISOString() });
         added++;
     }
     if (history.length > 2000) history = history.slice(-2000);
@@ -140,36 +155,32 @@ async function run() {
         const data = await fetchData();
         if (!data || !data.length) return;
         data.sort((a, b) => (a.GameSessionID || 0) - (b.GameSessionID || 0));
-        const latest = data[data.length - 1];
-        if (!latest) return;
-        const sid = Number(latest.GameSessionID);
-        if (sid === lastSession) return;
+        const newResults = data.filter(item => Number(item.GameSessionID) > Number(lastSession || 0));
+        for (const result of newResults) {
+            const sid = Number(result.GameSessionID);
+            const sum = Number(result.Dice1) + Number(result.Dice2) + Number(result.Dice3);
+            const outcome = sum > 10 ? 'TAI' : 'XIU';
+            const pred = ensemblePredict(history);
+            stats.total++;
+            if (outcome === 'TAI') stats.tai++; else stats.xiu++;
 
-        const sum = Number(latest.Dice1) + Number(latest.Dice2) + Number(latest.Dice3);
-        const outcome = sum > 10 ? 'TAI' : 'XIU';
-        stats.total++;
-        if (outcome === 'TAI') stats.tai++; else stats.xiu++;
-
-        const pred = ensemblePredict(history);
-
-        // Kiểm tra dự đoán trước
-        if (history.length > 0) {
-            const prev = history[history.length - 1];
-            if (prev.pred) {
-                brainAI.recordFeedback(prev.pred, outcome);
-                if (prev.pred === outcome) { stats.correct++; console.log(`✅ Dự đoán trước (${prev.pred}) ĐÚNG`); }
-                else { stats.wrong++; console.log(`❌ Dự đoán trước (${prev.pred}) SAI`); }
+            if (history.length > 0) {
+                const prev = history[history.length - 1];
+                if (prev.pred) {
+                    brainAI.recordFeedback(prev.pred, outcome);
+                    if (prev.pred === outcome) stats.correct++;
+                    else stats.wrong++;
+                }
             }
+
+            history.push({ sessionId: String(sid), dice: [result.Dice1, result.Dice2, result.Dice3], sum, outcome, pred: pred.pred, receivedAt: new Date().toISOString() });
+            if (history.length > 2000) history.shift();
+            lastSession = sid;
+            console.log(`🎯 Ván ${sid}: ${result.Dice1}-${result.Dice2}-${result.Dice3} = ${sum} (${outcome})`);
+            if (pred.pred) console.log(`🔮 Dự đoán: ${pred.pred} (${pred.confidence}%) | ${pred.reason}`);
+            else console.log(`⏳ Chưa đủ dữ liệu (${history.length}/10)`);
         }
-
-        history.push({ sessionId: String(sid), dice: [latest.Dice1, latest.Dice2, latest.Dice3], sum, outcome, pred: pred.pred, receivedAt: new Date().toISOString() });
-        if (history.length > 2000) history.shift();
-        lastSession = sid;
-        saveData();
-
-        console.log(`🎯 Ván ${sid}: ${latest.Dice1}-${latest.Dice2}-${latest.Dice3} = ${sum} (${outcome})`);
-        if (pred.pred) console.log(`🔮 Dự đoán: ${pred.pred} (${pred.confidence}%) | ${pred.reason}`);
-        else console.log(`⏳ Chưa đủ dữ liệu (${history.length}/10)`);
+        if (newResults.length) saveData();
     } catch (e) { console.error('❌ Lỗi run:', e.message); }
     finally { isRunning = false; }
 }
