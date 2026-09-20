@@ -28,6 +28,7 @@ const STORAGE_DIR = process.env.DATA_DIR || (fs.existsSync('/var/data') ? '/var/
 const STORAGE_FILE = process.env.DATA_FILE || path.join(STORAGE_DIR, 'data.json');
 const MAX_HISTORY = 2000;
 const PRUNE_COUNT = 200;
+const WARMUP_ROUNDS = 10;
 
 let history = [];
 let lastSession = null;
@@ -116,7 +117,7 @@ function formatPrediction(prediction) {
 const modules = [aiAdaptive, aiLogitV2, antiBias, beCauPro, cau11Master, cauNganDai, brainAI, deepseekAI, hybridFollowBreak, onlineAIV3, patternAtlas, patternRich, skipGram, smartBreakV2];
 
 function ensemblePredict(h) {
-    if (h.length < 10) return { pred: null, confidence: 0, reason: 'Chưa đủ 10 phiên' };
+    if (h.length < WARMUP_ROUNDS) return { pred: null, confidence: 0, reason: `Đang học ${h.length}/${WARMUP_ROUNDS} phiên` };
     const scores = { TAI: 0, XIU: 0 };
     const reasons = [];
     let active = 0;
