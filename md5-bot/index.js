@@ -1,6 +1,7 @@
 const fetch = require('node-fetch');
 const http = require('http');
 const fs = require('fs');
+const path = require('path');
 
 // ===== IMPORT 15 MODULES =====
 const aiAdaptive = require('./modules/ai-adaptive');
@@ -23,22 +24,25 @@ const smartBreakV2 = require('./modules/smart-break-v2');
 const TOKEN = process.env.MD5_API_TOKEN || 'skooN9TKlxJGxgSVRzGShapr6ZBSAyPSdm3g06QugeLZ50dsPLBpQlEj4B+PoU7gBTstsxc74ivQLUaZT8Iam17IkREb7Fn2Br3VwVNQi7qCKtzSMdI4BY3HL9I4VEaWdAVzeZkOxx6qpBbYiNGQbL+32FLTO1yQFoZcgcRwrk7Uerl7XUZ0xA==';
 const API_URL = 'https://md5.changdelamgica.xyz/api/GetListSoiCau';
 const PORT = process.env.PORT || 3000;
-const STORAGE_FILE = 'data.json';
+const STORAGE_FILE = process.env.DATA_FILE || path.join(__dirname, 'data.json');
 
 let history = [];
 let lastSession = null;
 let stats = { total: 0, tai: 0, xiu: 0, correct: 0, wrong: 0 };
+let isRunning = false;
 
 // ===== LƯU / TẢI =====
 function saveData() {
     try {
-        fs.writeFileSync(STORAGE_FILE, JSON.stringify({
+        const tempFile = `${STORAGE_FILE}.tmp`;
+        fs.writeFileSync(tempFile, JSON.stringify({
             history: history.slice(-2000),
             stats, lastSession,
             brainMemory: brainAI._memory,
             cauMemory: cauNganDai._memory
         }, null, 2));
-    } catch (e) {}
+        fs.renameSync(tempFile, STORAGE_FILE);
+    } catch (e) { console.error('❌ Lỗi lưu dữ liệu:', e.message); }
 }
 function loadData() {
     try {
@@ -114,6 +118,8 @@ async function loadInitialHistory() {
 
 // ===== RUN =====
 async function run() {
+    if (isRunning) return;
+    isRunning = true;
     try {
         const data = await fetchData();
         if (!data || !data.length) return;
@@ -148,6 +154,7 @@ async function run() {
         if (pred.pred) console.log(`🔮 Dự đoán: ${pred.pred} (${pred.confidence}%) | ${pred.reason}`);
         else console.log(`⏳ Chưa đủ dữ liệu (${history.length}/10)`);
     } catch (e) { console.error('❌ Lỗi run:', e.message); }
+    finally { isRunning = false; }
 }
 
 // ===== SERVER =====
