@@ -16,6 +16,7 @@ const expandedCauBank = require('./modules/expanded-cau-bank');
 const hybridFollowBreak = require('./modules/hybrid-follow-break');
 const onlineAIV3 = require('./modules/online-ai-v3');
 const strategyEngine = require('./modules/strategy-engine');
+const stateStore = require('./modules/state-store');
 const patternAtlas = require('./modules/pattern-atlas');
 const patternRich = require('./modules/pattern-rich');
 const regimeDetector = require('./modules/regime-detector');
@@ -30,6 +31,8 @@ const SUPABASE_URL = process.env.SUPABASE_URL || 'https://mkcrlfgpncryalmmixsr.s
 const SUPABASE_KEY = process.env.SUPABASE_KEY || '';
 const STORAGE_DIR = process.env.DATA_DIR || (fs.existsSync('/var/data') ? '/var/data' : __dirname);
 const STORAGE_FILE = process.env.DATA_FILE || path.join(STORAGE_DIR, 'data.json');
+const HISTORY_FILE = process.env.HISTORY_FILE || path.join(STORAGE_DIR, 'history.json');
+const PREDICTIONS_FILE = process.env.PREDICTIONS_FILE || path.join(STORAGE_DIR, 'predictions.json');
 const MAX_HISTORY = 2000;
 const PRUNE_COUNT = 200;
 const WARMUP_ROUNDS = 10;
@@ -38,6 +41,7 @@ let history = [];
 let lastSession = null;
 let stats = { total: 0, tai: 0, xiu: 0, correct: 0, wrong: 0 };
 let strategyState = { champion: null };
+let warmupRemaining = WARMUP_ROUNDS;
 let isRunning = false;
 
 // ===== LƯU / TẢI =====
@@ -52,15 +56,35 @@ function getState() {
         cauMemory: cauNganDai._memory,
         modulePerformance,
         strategyState,
+        warmupRemaining,
     };
 }
 
 function saveLocalData(state) {
     try {
-        fs.mkdirSync(path.dirname(STORAGE_FILE), { recursive: true });
-        const tempFile = `${STORAGE_FILE}.tmp`;
-        fs.writeFileSync(tempFile, JSON.stringify(state, null, 2));
-        fs.renameSync(tempFile, STORAGE_FILE);
+        stateStore.writeJsonAtomic(STORAGE_FILE, state);
+        stateStore.writeJsonAtomic(HISTORY_FILE, state.history.map(item => ({
+            sessionId: item.sessionId,
+            dice: item.dice,
+            sum: item.sum,
+            outcome: item.outcome,
+            receivedAt: item.receivedAt,
+        })));
+        stateStore.writeJsonAtomic(PREDICTIONS_FILE, state.history.filter(item => item.pred).map(item => ({
+            sessionId: item.sessionId,
+            pred: item.pred,
+            rawPrediction: item.rawPrediction,
+            normalPrediction: item.normalPrediction,
+            reversePrediction: item.reversePrediction,
+            championStrategy: item.championStrategy,
+            strategyPredictions: item.strategyPredictions,
+            strategyCorrect: item.strategyCorrect,
+            recovery_mode: item.recovery_mode,
+            reverse_mode: item.reverse_mode,
+            mode: item.mode,
+            anti_tai: item.anti_tai,
+            anti_xiu: item.anti_xiu,
+        })));
     } catch (e) { console.error('❌ Lỗi lưu dữ liệu:', e.message); }
 }
 
@@ -94,9 +118,11 @@ function applyState(d) {
     if (d.cauMemory) cauNganDai._memory = d.cauMemory;
     if (d.modulePerformance) Object.assign(modulePerformance, d.modulePerformance);
     if (d.strategyState && typeof d.strategyState === 'object') strategyState = d.strategyState;
+    if (Number.isInteger(d.warmupRemaining)) warmupRemaining = Math.max(0, d.warmupRemaining);
 }
 
 async function loadData() {
+    let remoteState = null;
     if (SUPABASE_KEY) {
         try {
             const response = await fetch(`${SUPABASE_URL}/rest/v1/bot_state?id=eq.1&select=state`, {
@@ -104,19 +130,25 @@ async function loadData() {
             });
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const rows = await response.json();
-            if (rows[0] && rows[0].state) {
-                applyState(rows[0].state);
-                saveLocalData(rows[0].state);
-                return true;
-            }
+            if (rows[0] && rows[0].state) remoteState = rows[0].state;
         } catch (e) { console.error('❌ Lỗi đọc Supabase:', e.message); }
     }
-    try {
-        if (!fs.existsSync(STORAGE_FILE)) return false;
-        const d = JSON.parse(fs.readFileSync(STORAGE_FILE, 'utf8'));
-        applyState(d);
-        return true;
-    } catch (e) { return false; }
+    const localState = stateStore.readJsonWithBackup(STORAGE_FILE);
+    const savedHistory = stateStore.readJsonWithBackup(HISTORY_FILE);
+    const savedPredictions = stateStore.readJsonWithBackup(PREDICTIONS_FILE);
+    const fileHistory = stateStore.mergeHistory(
+        localState?.history,
+        Array.isArray(savedHistory) ? savedHistory : [],
+        Array.isArray(savedPredictions) ? savedPredictions : []
+    );
+    const localWithFiles = localState
+        ? { ...localState, history: fileHistory }
+        : { history: fileHistory, stats: {}, strategyState: {} };
+    const mergedState = stateStore.mergeStates([localWithFiles, remoteState], MAX_HISTORY);
+    if (!mergedState) return false;
+    applyState(mergedState);
+    saveLocalData(mergedState);
+    return true;
 }
 
 function sendJson(res, statusCode, payload) {
@@ -193,6 +225,17 @@ function recordModuleFeedback(signals, actual) {
 }
 
 function ensemblePredict(h) {
+    if (warmupRemaining > 0) {
+        return {
+            pred: null,
+            confidence: 0,
+            mode: 'Warmup',
+            reason: `Đang nhận diện, còn ${warmupRemaining} phiên mới`,
+            recovery_mode: false,
+            reverse_mode: false,
+            strategyPredictions: {},
+        };
+    }
     const prediction = strategyEngine.analyze(h, strategyState);
     strategyState.champion = prediction.champion_strategy;
     return prediction;
@@ -216,9 +259,41 @@ async function loadInitialHistory() {
     const data = await fetchData();
     if (!data || !data.length) return;
     data.sort((a, b) => (a.GameSessionID || 0) - (b.GameSessionID || 0));
-    lastSession = Number(data[data.length - 1].GameSessionID);
+    let added = 0;
+    let corrected = 0;
+    for (const result of data.slice(-MAX_HISTORY)) {
+        const sessionId = String(result.GameSessionID);
+        const sum = Number(result.Dice1) + Number(result.Dice2) + Number(result.Dice3);
+        const outcome = getOutcome(result);
+        const existing = history.find(item => item.sessionId === sessionId);
+        if (existing) {
+            if (existing.outcome !== outcome || existing.sum !== sum) {
+                existing.dice = [result.Dice1, result.Dice2, result.Dice3];
+                existing.sum = sum;
+                existing.outcome = outcome;
+                corrected++;
+            }
+            continue;
+        }
+        history.push({
+            sessionId,
+            dice: [result.Dice1, result.Dice2, result.Dice3],
+            sum,
+            outcome,
+            pred: null,
+            strategyPredictions: {},
+            strategyCorrect: {},
+            receivedAt: new Date().toISOString(),
+        });
+        added++;
+    }
+    history.sort((a, b) => Number(a.sessionId) - Number(b.sessionId));
+    if (history.length > MAX_HISTORY) history = history.slice(-MAX_HISTORY);
+    brainAI.learn(history);
+    cauNganDai.learn(history);
+    lastSession = history.length ? Number(history[history.length - 1].sessionId) : null;
     await saveData();
-    console.log(`✅ Đã lấy mốc phiên ${lastSession}. Chờ 10 phiên mới trước khi dự đoán.`);
+    console.log(`✅ Nạp ${added} phiên, sửa ${corrected}, tổng ${history.length}. Mốc ${lastSession}. Còn ${warmupRemaining} phiên warmup.`);
 }
 
 // ===== RUN =====
@@ -235,6 +310,7 @@ async function run() {
             const sum = Number(result.Dice1) + Number(result.Dice2) + Number(result.Dice3);
             const outcome = getOutcome(result);
             const pred = ensemblePredict(history);
+            if (warmupRemaining > 0) warmupRemaining--;
             stats.total++;
             if (outcome === 'TAI') stats.tai++; else stats.xiu++;
 
