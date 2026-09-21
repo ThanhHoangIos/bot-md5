@@ -15,6 +15,7 @@ const deepseekAI = require('./modules/deepseek-ai');
 const expandedCauBank = require('./modules/expanded-cau-bank');
 const hybridFollowBreak = require('./modules/hybrid-follow-break');
 const onlineAIV3 = require('./modules/online-ai-v3');
+const strategyEngine = require('./modules/strategy-engine');
 const patternAtlas = require('./modules/pattern-atlas');
 const patternRich = require('./modules/pattern-rich');
 const regimeDetector = require('./modules/regime-detector');
@@ -36,6 +37,7 @@ const WARMUP_ROUNDS = 10;
 let history = [];
 let lastSession = null;
 let stats = { total: 0, tai: 0, xiu: 0, correct: 0, wrong: 0 };
+let strategyState = { champion: null };
 let isRunning = false;
 
 // ===== LƯU / TẢI =====
@@ -49,6 +51,7 @@ function getState() {
         brainLastLearn: brainAI._lastLearn,
         cauMemory: cauNganDai._memory,
         modulePerformance,
+        strategyState,
     };
 }
 
@@ -90,6 +93,7 @@ function applyState(d) {
     if (Number.isInteger(d.brainLastLearn)) brainAI._lastLearn = d.brainLastLearn;
     if (d.cauMemory) cauNganDai._memory = d.cauMemory;
     if (d.modulePerformance) Object.assign(modulePerformance, d.modulePerformance);
+    if (d.strategyState && typeof d.strategyState === 'object') strategyState = d.strategyState;
 }
 
 async function loadData() {
@@ -155,6 +159,13 @@ function formatPrediction(prediction) {
             Phien_hien_tai: nextSession,
             Du_doan: outcome || '',
             Do_tin_cay: `${confidence}%`,
+            Mode: prediction.mode || 'Forced Prediction',
+            Recovery_Mode: Boolean(prediction.recovery_mode),
+            Reverse_Mode: Boolean(prediction.reverse_mode),
+            Anti_Tai: prediction.anti_tai || 0,
+            Anti_Xiu: prediction.anti_xiu || 0,
+            Normal_Win_Rate: prediction.normal_win_rate || 0,
+            Reverse_Win_Rate: prediction.reverse_win_rate || 0,
         },
     };
 }
@@ -182,54 +193,9 @@ function recordModuleFeedback(signals, actual) {
 }
 
 function ensemblePredict(h) {
-    if (h.length < WARMUP_ROUNDS) return { pred: null, confidence: 0, reason: `Đang học ${h.length}/${WARMUP_ROUNDS} phiên` };
-    const scores = { TAI: 0, XIU: 0 };
-    const reasons = [];
-    let active = 0;
-    const votes = { TAI: 0, XIU: 0 };
-    const signals = [];
-    for (let index = 0; index < modules.length; index++) {
-        const mod = modules[index];
-        const name = moduleNames[index];
-        try {
-            const res = mod.analyze(h);
-            if (res && res.pred) {
-                scores[res.pred] += res.score * getModuleWeight(name);
-                votes[res.pred]++;
-                signals.push({ name, pred: res.pred });
-                if (res.reason) reasons.push(res.reason);
-                active++;
-            }
-        } catch (e) {}
-    }
-    const regime = regimeDetector.detect(h);
-    const pred = scores.TAI > scores.XIU ? 'TAI' : (scores.XIU > scores.TAI ? 'XIU' : null);
-    if (!pred) {
-        const recent = h.slice(-10).map(item => item.outcome);
-        const tai = recent.filter(outcome => outcome === 'TAI').length;
-        const xiu = recent.length - tai;
-        const fallback = tai === xiu
-            ? (recent[recent.length - 1] === 'TAI' ? 'XIU' : 'TAI')
-            : (tai < xiu ? 'TAI' : 'XIU');
-        return {
-            pred: fallback,
-            confidence: 50,
-            reason: `Fallback cân bằng | ${regime} | ${active} modules`,
-            scores,
-            active,
-            votes,
-            signals,
-        };
-    }
-    const diff = Math.abs(scores.TAI - scores.XIU);
-    const dominantVotes = votes[pred];
-    const agreement = active ? dominantVotes / active : 0;
-    const totalFeedback = Object.values(modulePerformance).reduce((sum, item) => sum + item.hits + item.misses, 0);
-    const feedbackAccuracy = totalFeedback ? Object.values(modulePerformance).reduce((sum, item) => sum + item.hits, 0) / totalFeedback : 0.5;
-    const calibratedCap = totalFeedback >= 20 ? Math.round(50 + Math.max(0, feedbackAccuracy - 0.5) * 70) : 65;
-    const confidence = Math.min(50 + diff * 6 + Math.max(0, agreement - 0.5) * 30, calibratedCap, 85);
-    const strength = active >= 4 && agreement >= 0.65 && confidence >= 70 ? 'strong' : agreement >= 0.5 ? 'medium' : 'weak';
-    return { pred, confidence: Math.round(confidence), strength, agreement: Math.round(agreement * 100), reason: reasons.slice(0, 3).join(' | ') + ` | ${regime} | ${strength} (${dominantVotes}/${active})`, scores, active, votes, signals };
+    const prediction = strategyEngine.analyze(h, strategyState);
+    strategyState.champion = prediction.champion_strategy;
+    return prediction;
 }
 
 // ===== FETCH =====
@@ -282,15 +248,35 @@ async function run() {
                 }
             }
 
-            history.push({ sessionId: String(sid), dice: [result.Dice1, result.Dice2, result.Dice3], sum, outcome, pred: pred.pred, signals: pred.signals || [], receivedAt: new Date().toISOString() });
+            const strategyCorrect = Object.fromEntries(
+                Object.entries(pred.strategyPredictions || {}).map(([name, value]) => [name, value === outcome])
+            );
+            history.push({
+                sessionId: String(sid),
+                dice: [result.Dice1, result.Dice2, result.Dice3],
+                sum,
+                outcome,
+                pred: pred.pred,
+                rawPrediction: pred.raw_prediction,
+                normalPrediction: pred.normalPrediction,
+                reversePrediction: pred.reversePrediction,
+                championStrategy: pred.champion_strategy,
+                strategyPredictions: pred.strategyPredictions || {},
+                strategyCorrect,
+                recovery_mode: pred.recovery_mode,
+                reverse_mode: pred.reverse_mode,
+                mode: pred.mode,
+                anti_tai: pred.anti_tai,
+                anti_xiu: pred.anti_xiu,
+                receivedAt: new Date().toISOString(),
+            });
             if (history.length > MAX_HISTORY) {
                 history.splice(0, PRUNE_COUNT);
                 console.log(`🧹 Đã xóa ${PRUNE_COUNT} phiên cũ. Còn lại ${history.length} phiên.`);
             }
             lastSession = sid;
             console.log(`🎯 Ván ${sid}: ${result.Dice1}-${result.Dice2}-${result.Dice3} = ${sum} (${outcome})`);
-            if (pred.pred) console.log(`🔮 Dự đoán: ${pred.pred} (${pred.confidence}%) | ${pred.reason}`);
-            else console.log(`⏳ Chưa đủ dữ liệu (${history.length}/10)`);
+            console.log(`🔮 Dự đoán: ${pred.pred} (${pred.confidence}%) | ${pred.mode} | ${pred.reason}`);
         }
         if (newResults.length) await saveData();
     } catch (e) { console.error('❌ Lỗi run:', e.message); }
