@@ -2,29 +2,627 @@
 <html lang="vi">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MD5 Bot Dashboard</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>🎲 TÀI XỈU MD5</title>
 <style>
-*{box-sizing:border-box;margin:0}body{background:#05080f;color:#e2e8f0;font:14px system-ui,sans-serif;min-height:100vh;padding:12px}.wrap{max-width:600px;margin:auto}.header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}.brand{font-size:20px;font-weight:800;color:#22d3ee}.online{color:#4ade80;font-size:12px}.dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:#4ade80;box-shadow:0 0 12px #4ade80;margin-right:5px}.card,.stat{background:#0f172a;border:1px solid #1e293b;border-radius:12px}.card{padding:16px;margin-bottom:12px}.dice-row{display:flex;justify-content:center;gap:14px;margin:12px}.dice{width:60px;height:60px;border-radius:14px;display:grid;place-items:center;font-size:26px;font-weight:800;background:#1a2236;border:2px solid #2a3a4a}.dice.tai{border-color:#4ade80;color:#4ade80;background:#0a2a1a}.dice.xiu{border-color:#f87171;color:#f87171;background:#2a0a0a}.result{text-align:center;font-size:22px;font-weight:800}.tai{color:#4ade80}.xiu{color:#f87171}.session{text-align:center;color:#64748b;font-size:12px;margin-top:4px}.pred-box{background:#0a0f1a;border-radius:10px;text-align:center;padding:12px;margin-top:10px}.label{font-size:11px;color:#64748b;letter-spacing:1px}.pred{font-size:32px;font-weight:800;margin:4px}.wait{color:#fbbf24;font-size:20px}.muted{color:#94a3b8;font-size:12px}.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0}.stat{text-align:center;padding:10px}.num{font-size:22px;font-weight:700}.cyan{color:#22d3ee}.history{max-height:400px;overflow:auto}.row{display:grid;grid-template-columns:75px 1fr 50px 42px;gap:8px;align-items:center;padding:10px 0;border-bottom:1px solid #1a2438;font-size:13px}.row:last-child{border:0}.h-session{color:#94a3b8;font-weight:600}.h-pred,.h-status{text-align:center;font-weight:700;font-size:11px}.status{text-align:center;color:#fbbf24;font-size:12px;margin-top:8px}
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Inter:wght@400;500;600;700;800&display=swap');
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: radial-gradient(ellipse at top, #1a0a05 0%, #0a0508 40%, #050208 100%);
+  color: #e2e8f0;
+  font-family: 'Inter', sans-serif;
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  padding: 10px;
+  overflow-x: hidden;
+}
+.wrap { max-width: 480px; width: 100%; position: relative; }
+
+/* HEADER */
+.top-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: linear-gradient(135deg, #1a0d08, #0d0508);
+  border: 1px solid #4a2010;
+  border-radius: 14px;
+  padding: 10px 14px;
+  margin-bottom: 10px;
+  box-shadow: 0 4px 20px rgba(255, 100, 0, 0.1);
+}
+.logo-area { display: flex; align-items: center; gap: 8px; }
+.logo-icon { font-size: 22px; }
+.logo-text {
+  font-family: 'Orbitron', sans-serif;
+  font-weight: 900;
+  font-size: 16px;
+  background: linear-gradient(90deg, #ffd700, #ff8c00);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  letter-spacing: 1px;
+}
+.balance-box {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+.balance-label { font-size: 9px; color: #8a7060; text-transform: uppercase; }
+.balance-value {
+  font-family: 'Orbitron', sans-serif;
+  font-weight: 700;
+  font-size: 14px;
+  color: #ffd700;
+}
+
+/* SESSION INFO */
+.session-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: rgba(20, 10, 5, 0.7);
+  border: 1px solid #3a2010;
+  border-radius: 10px;
+  padding: 6px 12px;
+  margin-bottom: 10px;
+  font-size: 11px;
+}
+.session-id { color: #ffa500; font-family: 'Orbitron', sans-serif; font-weight: 700; }
+.session-status { color: #4ade80; }
+.session-status.wait { color: #fbbf24; }
+.session-timer {
+  font-family: 'Orbitron', sans-serif;
+  font-weight: 700;
+  font-size: 14px;
+  color: #ffd700;
+  min-width: 24px;
+  text-align: center;
+}
+
+/* BÀN XÚC XẮC */
+.dice-stage {
+  position: relative;
+  background: linear-gradient(180deg, #2a1208 0%, #1a0a05 50%, #0d0508 100%);
+  border: 2px solid #4a2010;
+  border-radius: 20px;
+  padding: 20px 16px;
+  margin-bottom: 12px;
+  overflow: hidden;
+  box-shadow: inset 0 0 60px rgba(255, 100, 0, 0.15), 0 8px 30px rgba(0,0,0,0.6);
+}
+.dice-stage::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 50%;
+  transform: translateX(-50%);
+  width: 80%; height: 1px;
+  background: linear-gradient(90deg, transparent, #ff8c00, transparent);
+  opacity: 0.6;
+}
+.stage-label {
+  text-align: center;
+  font-size: 10px;
+  color: #a08060;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  margin-bottom: 12px;
+  font-family: 'Orbitron', sans-serif;
+}
+.dice-row {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  margin: 8px 0;
+}
+.dice {
+  width: 68px;
+  height: 68px;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32px;
+  font-weight: 900;
+  font-family: 'Orbitron', sans-serif;
+  background: linear-gradient(145deg, #f5f5f5, #d0d0d0);
+  color: #1a0a05;
+  border: 3px solid #8a8a8a;
+  box-shadow: 0 6px 16px rgba(0,0,0,0.6), inset 0 -3px 8px rgba(0,0,0,0.2), inset 0 3px 8px rgba(255,255,255,0.6);
+  transition: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  position: relative;
+}
+.dice.spinning {
+  animation: diceSpin 0.15s infinite;
+}
+@keyframes diceSpin {
+  0% { transform: rotate(0deg) scale(1); }
+  50% { transform: rotate(180deg) scale(1.05); }
+  100% { transform: rotate(360deg) scale(1); }
+}
+.dice.tai {
+  border-color: #4ade80;
+  box-shadow: 0 0 30px rgba(74, 222, 128, 0.6), 0 6px 16px rgba(0,0,0,0.6);
+}
+.dice.xiu {
+  border-color: #f87171;
+  box-shadow: 0 0 30px rgba(248, 113, 113, 0.6), 0 6px 16px rgba(0,0,0,0.6);
+}
+.dice.dim { opacity: 0.4; }
+.dice.hidden { visibility: hidden; }
+
+.result-display {
+  text-align: center;
+  margin-top: 14px;
+}
+.result-total {
+  font-size: 12px;
+  color: #a08060;
+  margin-bottom: 2px;
+}
+.result-total b { color: #ffd700; font-family: 'Orbitron', sans-serif; font-size: 16px; }
+.result-name {
+  font-family: 'Orbitron', sans-serif;
+  font-weight: 900;
+  font-size: 36px;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  line-height: 1.1;
+  transition: all 0.3s;
+}
+.result-name.tai {
+  color: #4ade80;
+  text-shadow: 0 0 30px rgba(74, 222, 128, 0.8), 0 0 60px rgba(74, 222, 128, 0.4);
+}
+.result-name.xiu {
+  color: #f87171;
+  text-shadow: 0 0 30px rgba(248, 113, 113, 0.8), 0 0 60px rgba(248, 113, 113, 0.4);
+}
+.result-name.wait {
+  color: #fbbf24;
+  font-size: 22px;
+  text-shadow: 0 0 20px rgba(251, 191, 36, 0.5);
+}
+
+/* DỰ ĐOÁN */
+.prediction-box {
+  background: linear-gradient(135deg, #1a0d08 0%, #2a1005 100%);
+  border: 2px solid #ff8c00;
+  border-radius: 16px;
+  padding: 14px;
+  margin-bottom: 12px;
+  box-shadow: 0 0 40px rgba(255, 140, 0, 0.2), inset 0 0 30px rgba(255, 140, 0, 0.05);
+  position: relative;
+  overflow: hidden;
+}
+.prediction-box::before {
+  content: '🔮 AI PREDICTION';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #ff8c00;
+  color: #1a0d08;
+  font-family: 'Orbitron', sans-serif;
+  font-weight: 900;
+  font-size: 9px;
+  letter-spacing: 2px;
+  padding: 3px 14px;
+  border-radius: 0 0 8px 8px;
+}
+.pred-label {
+  text-align: center;
+  font-size: 10px;
+  color: #a08060;
+  margin-top: 10px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+.pred-main {
+  text-align: center;
+  font-family: 'Orbitron', sans-serif;
+  font-weight: 900;
+  font-size: 40px;
+  letter-spacing: 6px;
+  text-transform: uppercase;
+  margin: 4px 0;
+  transition: all 0.3s;
+}
+.pred-main.tai {
+  color: #4ade80;
+  text-shadow: 0 0 40px rgba(74, 222, 128, 0.9), 0 0 80px rgba(74, 222, 128, 0.5);
+  animation: glowTai 2s infinite;
+}
+.pred-main.xiu {
+  color: #f87171;
+  text-shadow: 0 0 40px rgba(248, 113, 113, 0.9), 0 0 80px rgba(248, 113, 113, 0.5);
+  animation: glowXiu 2s infinite;
+}
+.pred-main.wait { color: #fbbf24; font-size: 24px; }
+@keyframes glowTai {
+  0%, 100% { text-shadow: 0 0 40px rgba(74, 222, 128, 0.9), 0 0 80px rgba(74, 222, 128, 0.5); }
+  50% { text-shadow: 0 0 60px rgba(74, 222, 128, 1), 0 0 100px rgba(74, 222, 128, 0.7); }
+}
+@keyframes glowXiu {
+  0%, 100% { text-shadow: 0 0 40px rgba(248, 113, 113, 0.9), 0 0 80px rgba(248, 113, 113, 0.5); }
+  50% { text-shadow: 0 0 60px rgba(248, 113, 113, 1), 0 0 100px rgba(248, 113, 113, 0.7); }
+}
+
+.conf-bar {
+  height: 6px;
+  background: #2a1508;
+  border-radius: 3px;
+  margin: 8px 0;
+  overflow: hidden;
+}
+.conf-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #f87171, #fbbf24, #4ade80);
+  transition: width 0.5s;
+  border-radius: 3px;
+}
+.conf-text {
+  text-align: center;
+  font-size: 11px;
+  color: #a08060;
+}
+.conf-text b { color: #ffd700; font-family: 'Orbitron', sans-serif; }
+
+.pred-detail-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: #8a7060;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #3a2010;
+}
+.pred-detail-row span { flex: 1; text-align: center; }
+.pred-detail-row b { display: block; color: #ffa500; font-family: 'Orbitron', sans-serif; font-size: 12px; margin-top: 2px; }
+
+/* DỰ ĐOÁN XÚC XẮC */
+.dice-predict-box {
+  background: linear-gradient(135deg, #0a0d1a 0%, #15080a 100%);
+  border: 2px dashed #ffd700;
+  border-radius: 14px;
+  padding: 12px;
+  margin-bottom: 12px;
+  text-align: center;
+  position: relative;
+}
+.dice-predict-label {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 10px;
+  color: #ffd700;
+  letter-spacing: 2px;
+  margin-bottom: 8px;
+}
+.dice-predict-row {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin: 6px 0;
+}
+.dice-predict {
+  width: 46px;
+  height: 46px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  font-weight: 900;
+  font-family: 'Orbitron', sans-serif;
+  background: linear-gradient(145deg, #2a1f0a, #1a1005);
+  border: 2px dashed #ffd700;
+  color: #ffd700;
+  box-shadow: 0 0 20px rgba(255, 215, 0, 0.3);
+}
+.dice-predict-sum {
+  font-size: 13px;
+  color: #a08060;
+  margin-top: 6px;
+}
+.dice-predict-sum b { color: #ffd700; font-family: 'Orbitron', sans-serif; font-size: 16px; }
+
+/* THỐNG KÊ */
+.stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 1fr;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.stat-box {
+  background: linear-gradient(145deg, #1a0d08, #0d0508);
+  border: 1px solid #3a2010;
+  border-radius: 10px;
+  padding: 8px 4px;
+  text-align: center;
+}
+.stat-box .num {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 16px;
+  font-weight: 900;
+  color: #ffd700;
+}
+.stat-box .num.green { color: #4ade80; }
+.stat-box .num.red { color: #f87171; }
+.stat-box .num.cyan { color: #22d3ee; }
+.stat-box .label {
+  font-size: 8px;
+  color: #8a7060;
+  text-transform: uppercase;
+  margin-top: 2px;
+  letter-spacing: 1px;
+}
+
+/* LỊCH SỬ */
+.history-box {
+  background: linear-gradient(145deg, #1a0d08, #0a0508);
+  border: 1px solid #3a2010;
+  border-radius: 14px;
+  padding: 10px;
+  margin-bottom: 10px;
+}
+.history-title {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 10px;
+  color: #ff8c00;
+  letter-spacing: 2px;
+  margin-bottom: 8px;
+  text-align: center;
+}
+.history-list { max-height: 250px; overflow-y: auto; }
+.history-list::-webkit-scrollbar { width: 4px; }
+.history-list::-webkit-scrollbar-thumb { background: #4a2010; border-radius: 2px; }
+.history-item {
+  display: grid;
+  grid-template-columns: 60px 1fr 44px 44px;
+  align-items: center;
+  padding: 7px 4px;
+  border-bottom: 1px solid #2a1508;
+  gap: 6px;
+  font-size: 11px;
+}
+.history-item:last-child { border-bottom: none; }
+.hist-session { color: #8a7060; font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 10px; }
+.hist-dice { color: #cbd5e1; }
+.hist-dice .t { color: #4ade80; font-weight: 700; }
+.hist-dice .x { color: #f87171; font-weight: 700; }
+.hist-pred {
+  text-align: center;
+  font-family: 'Orbitron', sans-serif;
+  font-weight: 700;
+  font-size: 10px;
+}
+.hist-pred.t { color: #4ade80; }
+.hist-pred.x { color: #f87171; }
+.hist-pred.n { color: #475569; }
+.hist-status { text-align: right; font-size: 9px; font-weight: 700; letter-spacing: 0.5px; }
+.hist-status.ok { color: #4ade80; }
+.hist-status.no { color: #f87171; }
+
+.footer-status {
+  text-align: center;
+  font-size: 10px;
+  color: #8a7060;
+  padding: 6px;
+}
 </style>
 </head>
-<body><main class="wrap">
-<header class="header"><span class="brand">MD5 BOT</span><span class="online"><i class="dot"></i>Online</span></header>
-<section class="card"><div class="dice-row"><div class="dice" id="d1">-</div><div class="dice" id="d2">-</div><div class="dice" id="d3">-</div></div><div class="result" id="result">---</div><div class="session" id="session">#---</div><div class="pred-box"><div class="label">DỰ ĐOÁN VÁN TIẾP</div><div class="pred wait" id="prediction">---</div><div class="muted" id="confidence">Đang phân tích...</div></div></section>
-<section class="stats"><div class="stat"><div class="num cyan" id="total">0</div><div class="label">Tổng ván</div></div><div class="stat"><div class="num tai" id="correct">0</div><div class="label">Đúng</div></div><div class="stat"><div class="num xiu" id="wrong">0</div><div class="label">Sai</div></div></section>
-<section class="card"><div class="label" style="margin-bottom:8px">TOÀN BỘ LỊCH SỬ ĐÃ LƯU</div><div class="history" id="history">Đang tải...</div><div class="status" id="status">Đang kết nối...</div></section>
-</main>
+<body>
+<div class="wrap">
+
+  <!-- TOP BAR -->
+  <div class="top-bar">
+    <div class="logo-area">
+      <span class="logo-icon">🎲</span>
+      <span class="logo-text">MD5 TÀI XỈU</span>
+    </div>
+    <div class="balance-box">
+      <div class="balance-label">Phiên</div>
+      <div class="balance-value" id="sessionId">#---</div>
+    </div>
+  </div>
+
+  <!-- SESSION INFO -->
+  <div class="session-bar">
+    <span class="session-id" id="sessionTop">SESSION #---</span>
+    <span class="session-status wait" id="statusLive">● ĐANG CHỜ</span>
+    <span class="session-timer" id="liveTimer">--</span>
+  </div>
+
+  <!-- DICE STAGE -->
+  <div class="dice-stage">
+    <div class="stage-label">KẾT QUẢ VÁN</div>
+    <div class="dice-row">
+      <div class="dice dim" id="d1">?</div>
+      <div class="dice dim" id="d2">?</div>
+      <div class="dice dim" id="d3">?</div>
+    </div>
+    <div class="result-display">
+      <div class="result-total">TỔNG <b id="sumTotal">--</b></div>
+      <div class="result-name wait" id="resultName">---</div>
+    </div>
+  </div>
+
+  <!-- PREDICTION -->
+  <div class="prediction-box">
+    <div class="pred-label">DỰ ĐOÁN VÁN TIẾP</div>
+    <div class="pred-main wait" id="predMain">---</div>
+    <div class="conf-bar"><div class="conf-fill" id="confBar" style="width:0%"></div></div>
+    <div class="conf-text">Độ tin cậy: <b id="confText">0%</b></div>
+    <div class="pred-detail-row">
+      <span>MODE<b id="modeText">—</b></span>
+      <span>CHAMPION<b id="champText">—</b></span>
+      <span>STATUS<b id="statusText">—</b></span>
+    </div>
+  </div>
+
+  <!-- DICE PREDICTION -->
+  <div class="dice-predict-box">
+    <div class="dice-predict-label">🎯 DỰ ĐOÁN XÚC XẮC</div>
+    <div class="dice-predict-row">
+      <div class="dice-predict" id="pd1">?</div>
+      <div class="dice-predict" id="pd2">?</div>
+      <div class="dice-predict" id="pd3">?</div>
+    </div>
+    <div class="dice-predict-sum">Tổng dự đoán: <b id="pdSum">--</b> → <b id="pdOutcome">--</b></div>
+  </div>
+
+  <!-- STATS -->
+  <div class="stats-grid">
+    <div class="stat-box"><div class="num cyan" id="totalGames">0</div><div class="label">Tổng</div></div>
+    <div class="stat-box"><div class="num green" id="correctCount">0</div><div class="label">Đúng</div></div>
+    <div class="stat-box"><div class="num red" id="wrongCount">0</div><div class="label">Sai</div></div>
+    <div class="stat-box"><div class="num" id="winRate">0%</div><div class="label">Tỉ lệ</div></div>
+  </div>
+
+  <!-- HISTORY -->
+  <div class="history-box">
+    <div class="history-title">📜 LỊCH SỬ 20 VÁN GẦN NHẤT</div>
+    <div class="history-list" id="historyList">⏳ Đang tải...</div>
+  </div>
+
+  <div class="footer-status" id="footerStatus">⏳ Đang kết nối...</div>
+
+</div>
+
 <script>
-const byId=id=>document.getElementById(id);
-async function load(){
- try{
-    const [statusRes,resultsRes]=await Promise.all([fetch('/api/bot/status',{cache:'no-store'}),fetch('/api/bot/results?limit=2000',{cache:'no-store'})]);
-  const status=await statusRes.json(), results=(await resultsRes.json()).results||[], last=status.lastResult;
-  if(last){[last.dice[0],last.dice[1],last.dice[2]].forEach((value,i)=>{const el=byId('d'+(i+1));el.textContent=value;el.className='dice '+(last.outcome==='TAI'?'tai':'xiu')});byId('result').textContent=`${last.outcome==='TAI'?'Tài':'Xỉu'} (${last.sum})`;byId('result').className='result '+(last.outcome==='TAI'?'tai':'xiu');byId('session').textContent='#'+status.lastSession}
-  const p=status.prediction;byId('prediction').textContent=p?.pred?(p.pred==='TAI'?'Tài':'Xỉu'):'Chưa đủ dữ liệu';byId('prediction').className='pred '+(p?.pred?(p.pred==='TAI'?'tai':'xiu'):'wait');byId('confidence').textContent=p?.pred?`Tin cậy ${p.confidence}% · ${p.strength||''}`:'Đang phân tích...';
-  let correct=0,wrong=0;results.forEach(r=>{if(r.pred)(r.pred===r.outcome?correct++:wrong++)});byId('total').textContent=status.historyCount;byId('correct').textContent=correct;byId('wrong').textContent=wrong;
-  byId('history').innerHTML=results.filter(r=>r.pred).slice().reverse().map(r=>{const actual=r.outcome==='TAI'?'Tài':'Xỉu',pred=r.pred==='TAI'?'Tài':'Xỉu',ok=r.pred===r.outcome;return `<div class="row"><span class="h-session">#${r.sessionId}</span><span>${r.dice.join('-')} = <b class="${r.outcome==='TAI'?'tai':'xiu'}">${actual}</b></span><span class="h-pred ${r.pred==='TAI'?'tai':'xiu'}">${pred}</span><span class="h-status ${ok?'tai':'xiu'}">${ok?'ĐÚNG':'SAI'}</span></div>`}).join('')||'Chưa có phiên đã dự đoán';byId('status').textContent='Cập nhật '+new Date().toLocaleTimeString('vi-VN');
- }catch(error){byId('status').textContent='Không kết nối được API';console.error(error)}
+// ================================================================
+//  DASHBOARD - GAME UI
+// ================================================================
+
+function getOutcomeLabel(sum) {
+    return sum >= 11 ? 'TAI' : 'XIU';
 }
-load();setInterval(load,1000);
-</script></body></html>
+
+function renderDice(el, val, outcome) {
+    el.textContent = val;
+    el.className = 'dice ' + (outcome === 'TAI' ? 'tai' : 'xiu');
+}
+
+async function fetchData() {
+    try {
+        const [statusRes, resultsRes] = await Promise.all([
+            fetch('/api/bot/status'),
+            fetch('/api/bot/results?limit=30')
+        ]);
+        const status = await statusRes.json();
+        const resultsData = await resultsRes.json();
+        return { status, results: resultsData.results || [] };
+    } catch (e) {
+        console.error('Lỗi fetch:', e);
+        return null;
+    }
+}
+
+function render(data) {
+    if (!data) {
+        document.getElementById('footerStatus').textContent = '❌ Không kết nối được API';
+        return;
+    }
+
+    const { status, results } = data;
+    const last = status.lastResult;
+
+    // Cập nhật ván hiện tại
+    if (last) {
+        const outcome = last.outcome;
+        document.getElementById('d1').textContent = last.dice[0];
+        document.getElementById('d2').textContent = last.dice[1];
+        document.getElementById('d3').textContent = last.dice[2];
+        ['d1','d2','d3'].forEach(id => {
+            const el = document.getElementById(id);
+            el.className = 'dice ' + (outcome === 'TAI' ? 'tai' : 'xiu');
+        });
+        document.getElementById('sumTotal').textContent = last.sum;
+        const nameEl = document.getElementById('resultName');
+        nameEl.textContent = outcome;
+        nameEl.className = 'result-name ' + (outcome === 'TAI' ? 'tai' : 'xiu');
+        document.getElementById('sessionId').textContent = '#' + status.lastSession;
+        document.getElementById('sessionTop').textContent = 'SESSION #' + status.lastSession;
+    }
+
+    // Cập nhật dự đoán Tài/Xỉu
+    if (status.prediction && status.prediction.final_prediction) {
+        const p = status.prediction;
+        const predEl = document.getElementById('predMain');
+        const predName = p.final_prediction === 'Tài' ? 'TÀI' : 'XỈU';
+        predEl.textContent = predName;
+        predEl.className = 'pred-main ' + (p.final_prediction === 'Tài' ? 'tai' : 'xiu');
+
+        const conf = p.display_confidence || 50;
+        document.getElementById('confBar').style.width = conf + '%';
+        document.getElementById('confText').textContent = conf + '%';
+
+        document.getElementById('modeText').textContent = p.mode || '—';
+        document.getElementById('champText').textContent = (p.champion_strategy || '—').replace('_', ' ');
+        document.getElementById('statusText').textContent = p.status || '—';
+    }
+
+    // Cập nhật dự đoán xúc xắc
+    if (status.prediction && status.prediction.dice_prediction) {
+        const dp = status.prediction.dice_prediction;
+        document.getElementById('pd1').textContent = dp.dice[0];
+        document.getElementById('pd2').textContent = dp.dice[1];
+        document.getElementById('pd3').textContent = dp.dice[2];
+        const out = dp.sum >= 11 ? 'TÀI' : 'XỈU';
+        document.getElementById('pdSum').textContent = dp.sum;
+        const outEl = document.getElementById('pdOutcome');
+        outEl.textContent = out;
+        outEl.style.color = out === 'TÀI' ? '#4ade80' : '#f87171';
+    }
+
+    // Cập nhật status
+    const statusEl = document.getElementById('statusLive');
+    statusEl.textContent = '● LIVE';
+    statusEl.className = 'session-status';
+
+    // Thống kê
+    let correct = 0, wrong = 0;
+    results.forEach(r => {
+        if (r.pred) {
+            if (r.pred === r.outcome) correct++;
+            else wrong++;
+        }
+    });
+    document.getElementById('totalGames').textContent = status.historyCount || 0;
+    document.getElementById('correctCount').textContent = correct;
+    document.getElementById('wrongCount').textContent = wrong;
+    const rate = (correct + wrong) > 0 ? (correct / (correct + wrong) * 100).toFixed(1) : '0.0';
+    document.getElementById('winRate').textContent = rate + '%';
+
+    // History
+    const historyHtml = results.slice().reverse().slice(0, 20).map(r => {
+        const resultCls = r.outcome === 'TAI' ? 't' : 'x';
+        const predLabel = r.pred ? (r.pred === 'TAI' ? 'Tài' : 'Xỉu') : '---';
+        const predCls = r.pred ? (r.pred === 'TAI' ? 't' : 'x') : 'n';
+        let statusHtml = '';
+        if (r.pred) {
+            const ok = r.pred === r.outcome;
+            statusHtml = `<span class="${ok ? 'ok' : 'no'}">${ok ? 'ĐÚNG' : 'SAI'}</span>`;
+        }
+        return `
+            <div class="history-item">
+                <div class="hist-session">#${r.sessionId}</div>
+                <div class="hist-dice">${r.dice[0]}-${r.dice[1]}-${r.dice[2]} = ${r.sum} <span class="${resultCls}">${r.outcome}</span></div>
+                <div class="hist-pred ${predCls}">${predLabel}</div>
+                <div class="hist-status">${statusHtml}</div>
+            </div>
+        `;
+    }).join('');
+    document.getElementById('historyList').innerHTML = historyHtml || '⏳ Đang tải...';
+
+    document.getElementById('footerStatus').textContent = '✅ Cập nhật ' + new Date().toLocaleTimeString('vi-VN');
+}
+
+async function update() {
+    const data = await fetchData();
+    render(data);
+}
+
+update();
+setInterval(update, 3000);
+</script>
+</body>
+</html>
