@@ -33,6 +33,7 @@ const STORAGE_FILE = process.env.DATA_FILE || path.join(STORAGE_DIR, 'data.json'
 const MAX_HISTORY = 2000;
 const PRUNE_COUNT = 200;
 const WARMUP_ROUNDS = 10;
+const ADVANCED_TOTAL_MIN_HISTORY = 20;
 
 let history = [];
 let lastSession = null;
@@ -135,6 +136,24 @@ function getOutcome(result) {
         || (Number(result.Dice1) + Number(result.Dice2) + Number(result.Dice3) > 10 ? 'TAI' : 'XIU');
 }
 
+function getPredictionReadiness(currentHistory) {
+    const required = WARMUP_ROUNDS;
+    const advancedRequired = ADVANCED_TOTAL_MIN_HISTORY;
+    const current = Number(currentHistory || 0);
+    const missing = Math.max(0, required - current);
+    const advancedMissing = Math.max(0, advancedRequired - current);
+
+    return {
+        currentHistory: current,
+        requiredHistory: required,
+        missingHistory: missing,
+        advancedTotalRequiredHistory: advancedRequired,
+        advancedTotalMissingHistory: advancedMissing,
+        ready: current >= required,
+        advancedReady: current >= advancedRequired,
+    };
+}
+
 function formatPrediction(prediction) {
     const last = history[history.length - 1];
     const nextSession = last ? Number(last.sessionId) + 1 : null;
@@ -142,6 +161,7 @@ function formatPrediction(prediction) {
     const actualOutcome = last ? (last.outcome === 'TAI' ? 'Tai' : 'Xiu') : null;
     const dice = last ? last.dice : [null, null, null];
     const confidence = Number(prediction.confidence || 0);
+    const readiness = getPredictionReadiness(history.length);
 
     return {
         ResponseData: 1,
@@ -156,6 +176,12 @@ function formatPrediction(prediction) {
             Phien_hien_tai: nextSession,
             Du_doan: outcome || '',
             Do_tin_cay: `${confidence}%`,
+            canPredict: readiness.ready,
+            currentHistory: readiness.currentHistory,
+            requiredHistory: readiness.requiredHistory,
+            missingHistory: readiness.missingHistory,
+            advancedTotalRequiredHistory: readiness.advancedTotalRequiredHistory,
+            advancedTotalMissingHistory: readiness.advancedTotalMissingHistory,
         },
     };
 }
@@ -250,8 +276,24 @@ function combineWeightedSignals(signals, regime) {
 }
 
 function ensemblePredict(h) {
+    const readiness = getPredictionReadiness(h.length);
     if (h.length < WARMUP_ROUNDS) {
-        return { pred: null, confidence: 0, reason: `Đang học ${h.length}/${WARMUP_ROUNDS} phiên`, regime: 'warmup', signals: [], scores: { TAI: 0, XIU: 0 }, active: 0, votes: { TAI: 0, XIU: 0 } };
+        return {
+            pred: null,
+            confidence: 0,
+            reason: `Đang học ${h.length}/${WARMUP_ROUNDS} phiên; cần thêm ${readiness.missingHistory} phiên để bắt đầu dự đoán`,
+            regime: 'warmup',
+            signals: [],
+            scores: { TAI: 0, XIU: 0 },
+            active: 0,
+            votes: { TAI: 0, XIU: 0 },
+            requiredHistory: readiness.requiredHistory,
+            currentHistory: readiness.currentHistory,
+            missingHistory: readiness.missingHistory,
+            advancedTotalRequiredHistory: readiness.advancedTotalRequiredHistory,
+            advancedTotalMissingHistory: readiness.advancedTotalMissingHistory,
+            canPredict: readiness.ready,
+        };
     }
 
     const regime = regimeDetector.detect(h);
@@ -309,6 +351,12 @@ function ensemblePredict(h) {
         scores: weighted.scores,
         active: weighted.active,
         votes: weighted.votes,
+        requiredHistory: readiness.requiredHistory,
+        currentHistory: readiness.currentHistory,
+        missingHistory: readiness.missingHistory,
+        advancedTotalRequiredHistory: readiness.advancedTotalRequiredHistory,
+        advancedTotalMissingHistory: readiness.advancedTotalMissingHistory,
+        canPredict: readiness.ready,
     };
 }
 
@@ -393,7 +441,12 @@ http.createServer((req, res) => {
             sendJson(res, 200, {
                 status: 'running', lastSession,
                 lastResult: history.length ? { dice: history[history.length - 1].dice, sum: history[history.length - 1].sum, outcome: history[history.length - 1].outcome } : null,
-                stats, prediction: pred, historyCount: history.length
+                stats, prediction: pred, historyCount: history.length,
+                requiredHistory: WARMUP_ROUNDS,
+                advancedTotalRequiredHistory: ADVANCED_TOTAL_MIN_HISTORY,
+                currentHistory: history.length,
+                missingHistory: Math.max(0, WARMUP_ROUNDS - history.length),
+                canPredict: history.length >= WARMUP_ROUNDS,
             });
         } else if (requestUrl.pathname === '/api/bot/results') {
             const requestedLimit = Number.parseInt(requestUrl.searchParams.get('limit'), 10);
