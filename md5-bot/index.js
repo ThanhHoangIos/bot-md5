@@ -259,41 +259,12 @@ async function loadInitialHistory() {
     const data = await fetchData();
     if (!data || !data.length) return;
     data.sort((a, b) => (a.GameSessionID || 0) - (b.GameSessionID || 0));
-    let added = 0;
-    let corrected = 0;
-    for (const result of data.slice(-MAX_HISTORY)) {
-        const sessionId = String(result.GameSessionID);
-        const sum = Number(result.Dice1) + Number(result.Dice2) + Number(result.Dice3);
-        const outcome = getOutcome(result);
-        const existing = history.find(item => item.sessionId === sessionId);
-        if (existing) {
-            if (existing.outcome !== outcome || existing.sum !== sum) {
-                existing.dice = [result.Dice1, result.Dice2, result.Dice3];
-                existing.sum = sum;
-                existing.outcome = outcome;
-                corrected++;
-            }
-            continue;
-        }
-        history.push({
-            sessionId,
-            dice: [result.Dice1, result.Dice2, result.Dice3],
-            sum,
-            outcome,
-            pred: null,
-            strategyPredictions: {},
-            strategyCorrect: {},
-            receivedAt: new Date().toISOString(),
-        });
-        added++;
-    }
-    history.sort((a, b) => Number(a.sessionId) - Number(b.sessionId));
-    if (history.length > MAX_HISTORY) history = history.slice(-MAX_HISTORY);
-    brainAI.learn(history);
-    cauNganDai.learn(history);
-    lastSession = history.length ? Number(history[history.length - 1].sessionId) : null;
+    const apiLatest = Number(data[data.length - 1].GameSessionID);
+    const savedLatest = history.length ? Number(history[history.length - 1].sessionId) : null;
+    if (savedLatest != null) lastSession = Math.max(Number(lastSession || 0), savedLatest);
+    else lastSession = Math.max(0, apiLatest - 1);
     await saveData();
-    console.log(`✅ Nạp ${added} phiên, sửa ${corrected}, tổng ${history.length}. Mốc ${lastSession}. Còn ${warmupRemaining} phiên warmup.`);
+    console.log(`✅ Giữ ${history.length} phiên đã lưu. Mốc ${lastSession}; cập nhật từng phiên mới. Còn ${warmupRemaining} phiên warmup.`);
 }
 
 // ===== RUN =====
@@ -304,7 +275,9 @@ async function run() {
         const data = await fetchData();
         if (!data || !data.length) return;
         data.sort((a, b) => (a.GameSessionID || 0) - (b.GameSessionID || 0));
-        const newResults = data.filter(item => Number(item.GameSessionID) > Number(lastSession || 0));
+        const newResults = data
+            .filter(item => Number(item.GameSessionID) > Number(lastSession || 0))
+            .slice(0, 1);
         for (const result of newResults) {
             const sid = Number(result.GameSessionID);
             const sum = Number(result.Dice1) + Number(result.Dice2) + Number(result.Dice3);
