@@ -116,6 +116,40 @@ function percentage(a, b) {
     return +(a / b * 100).toFixed(2);
 }
 
+function entropy(history) {
+    if (!history.length) return 0;
+    const tai = history.filter(total => classifyTotal(total) === 'Tài').length / history.length;
+    if (tai === 0 || tai === 1) return 0;
+    return +(-tai * Math.log2(tai) - (1 - tai) * Math.log2(1 - tai)).toFixed(3);
+}
+
+function analyzeRuns(history) {
+    if (!history.length) return { currentTotal: null, currentResult: null, currentLength: 0 };
+    const current = history[history.length - 1];
+    let length = 1;
+    for (let index = history.length - 2; index >= 0 && history[index] === current; index--) length++;
+    return { currentTotal: current, currentResult: classifyTotal(current), currentLength: length };
+}
+
+function buildResultTransition(history) {
+    const result = {
+        'Tài': { sample: 0, nextTai: 0, nextXiu: 0, taiRate: 0, xiuRate: 0 },
+        'Xỉu': { sample: 0, nextTai: 0, nextXiu: 0, taiRate: 0, xiuRate: 0 }
+    };
+    for (let index = 0; index < history.length - 1; index++) {
+        const current = classifyTotal(history[index]);
+        const next = classifyTotal(history[index + 1]);
+        if (!current || !next) continue;
+        result[current].sample++;
+        result[current][next === 'Tài' ? 'nextTai' : 'nextXiu']++;
+    }
+    for (const row of Object.values(result)) {
+        row.taiRate = percentage(row.nextTai, row.sample);
+        row.xiuRate = percentage(row.nextXiu, row.sample);
+    }
+    return result;
+}
+
 function argMax(obj) {
     let best = null;
     let bestValue = -Infinity;
@@ -359,7 +393,7 @@ function predictFromCurrentTotal(history, minSample = 5) {
 
     if (!row || row.sample < minSample) {
         return {
-            prediction: classifyTotal(current) === 'Tài' ? 'Xỉu' : 'Tài',
+            prediction: null,
             predictedTotal: null,
             confidence: 0,
             sample: row?.sample || 0,
@@ -507,6 +541,8 @@ function analyze(history, options = {}) {
     const movement = analyzeMovement(totals);
     const reversal = analyzeReversal(totals);
     const repeats = analyzeRepeats(totals);
+    const runs = analyzeRuns(totals);
+    const resultTransition = buildResultTransition(totals);
     const prediction = choosePrediction(totals);
     const lastTotal = totals[totals.length - 1];
 
@@ -523,6 +559,9 @@ function analyze(history, options = {}) {
         movement,
         reversal,
         repeats,
+        runs,
+        entropy: entropy(totals.slice(-20)),
+        resultTransition,
 
         windows,
 
@@ -562,6 +601,25 @@ function strategy(history) {
     };
 }
 
+function signal(history) {
+    const result = analyze(history);
+    const prediction = result.prediction || {};
+    if (!result.ok || !prediction.prediction || prediction.source === 'FALLBACK' || prediction.sample < 3) {
+        return { pred: null, score: 0, reason: 'Advanced Total: chưa đủ mẫu' };
+    }
+    const agreement = prediction.agreement && prediction.agreement.sameResult ? 1.25 : 1;
+    const score = Math.max(0.5, Math.min(5, (prediction.confidence / 25) * agreement));
+    return {
+        pred: prediction.prediction === 'Tài' ? 'TAI' : 'XIU',
+        score,
+        reason: `Advanced Total: ${prediction.reason} | ${prediction.source}`,
+        predictedTotal: prediction.predictedTotal,
+        confidence: prediction.confidence,
+        sample: prediction.sample,
+        analysis: result,
+    };
+}
+
 module.exports = {
     TOTAL_MIN,
     TOTAL_MAX,
@@ -580,5 +638,9 @@ module.exports = {
     analyzePredictions,
     choosePrediction,
     analyze,
-    strategy
+    strategy,
+    signal,
+    entropy,
+    analyzeRuns,
+    buildResultTransition
 };

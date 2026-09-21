@@ -20,6 +20,7 @@ const regimeDetector = require('./modules/regime-detector');
 const skipGram = require('./modules/skip-gram');
 const smartBreakV2 = require('./modules/smart-break-v2');
 const patternEngine = require('./modules/pattern-engine');
+const advancedTotalPattern = require('./modules/advanced-total-pattern');
 
 // ===== CẤU HÌNH =====
 const TOKEN = process.env.MD5_API_TOKEN || 'skooN9TKlxJGxgSVRzGShapr6ZBSAyPSdm3g06QugeLZ50dsPLBpQlEj4B+PoU7gBTstsxc74ivQLUaZT8Iam17IkREb7Fn2Br3VwVNQi7qCKtzSMdI4BY3HL9I4VEaWdAVzeZkOxx6qpBbYiNGQbL+32FLTO1yQFoZcgcRwrk7Uerl7XUZ0xA==';
@@ -160,8 +161,8 @@ function formatPrediction(prediction) {
 }
 
 // ===== ENSEMBLE =====
-const modules = [aiAdaptive, aiLogitV2, antiBias, beCauPro, cau11Master, cauNganDai, brainAI, deepseekAI, hybridFollowBreak, onlineAIV3, patternAtlas, patternRich, skipGram, smartBreakV2, patternEngine];
-const moduleNames = ['adaptive', 'logit', 'antiBias', 'beCau', 'cau11', 'cauNganDai', 'brain', 'deepseek', 'hybrid', 'online', 'atlas', 'rich', 'skipGram', 'smartBreak', 'patternEngine'];
+const modules = [aiAdaptive, aiLogitV2, antiBias, beCauPro, cau11Master, cauNganDai, brainAI, deepseekAI, hybridFollowBreak, onlineAIV3, patternAtlas, patternRich, skipGram, smartBreakV2, patternEngine, { analyze: advancedTotalPattern.signal }];
+const moduleNames = ['adaptive', 'logit', 'antiBias', 'beCau', 'cau11', 'cauNganDai', 'brain', 'deepseek', 'hybrid', 'online', 'atlas', 'rich', 'skipGram', 'smartBreak', 'patternEngine', 'advancedTotal'];
 const modulePerformance = {};
 
 function getModuleWeight(name) {
