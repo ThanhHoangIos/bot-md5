@@ -19,7 +19,16 @@ assert.strictEqual(warmup.mode, 'Forced Prediction');
 
 const alternating = engine.analyze(historyFrom(['TAI', 'XIU', 'TAI', 'XIU', 'TAI', 'XIU'], 'TAI'), {});
 assert.ok(alternating.strategyPredictions.MARKOV_TRANSITION);
+assert.ok(alternating.strategyPredictions.CONDITIONAL_SUM);
 assert.ok(alternating.pred === 'TAI' || alternating.pred === 'XIU');
+
+const conditionalHistory = [];
+for (let index = 0; index < 12; index++) {
+  conditionalHistory.push({ sum: 7, outcome: 'TAI' });
+  conditionalHistory.push({ sum: 12, outcome: 'XIU' });
+}
+const conditional = engine.analyze(conditionalHistory, {});
+assert.strictEqual(conditional.strategyPredictions.CONDITIONAL_SUM, 'TAI');
 
 const losses = historyFrom(Array.from({ length: 20 }, () => 'TAI'), 'XIU');
 const recovery = engine.analyze(losses, {});

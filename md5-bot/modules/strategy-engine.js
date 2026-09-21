@@ -7,6 +7,7 @@ const STRATEGY_NAMES = [
   'BIAS_MEAN_REVERSION',
   'BIAS_MOMENTUM',
   'HOT_COLD',
+  'CONDITIONAL_SUM',
   'MARKOV_TRANSITION',
   'ANTI_RAW',
   'RANDOM_BALANCED_FALLBACK',
@@ -92,6 +93,52 @@ function getRawStats(history, window = 20) {
   };
 }
 
+function getConditionalSumPrediction(history, fallbackPrediction) {
+  if (!history.length) {
+    return { prediction: fallbackPrediction, confidence: 50, reason: 'Chua co tong, dung fallback' };
+  }
+
+  const bySum = {};
+  const byGroup = {
+    low: { TAI: 0, XIU: 0 },
+    mid: { TAI: 0, XIU: 0 },
+    high: { TAI: 0, XIU: 0 },
+  };
+  for (let index = 1; index < history.length; index++) {
+    const previousSum = Number(history[index - 1].sum);
+    const nextOutcome = history[index].outcome;
+    if (!Number.isFinite(previousSum) || !['TAI', 'XIU'].includes(nextOutcome)) continue;
+    const bucket = previousSum <= 8 ? 'low' : previousSum <= 12 ? 'mid' : 'high';
+    if (!bySum[previousSum]) bySum[previousSum] = { TAI: 0, XIU: 0 };
+    bySum[previousSum][nextOutcome]++;
+    byGroup[bucket][nextOutcome]++;
+  }
+
+  const previousSum = Number(history[history.length - 1].sum);
+  const exact = bySum[previousSum];
+  if (exact) {
+    const total = exact.TAI + exact.XIU;
+    const prediction = exact.TAI >= exact.XIU ? 'TAI' : 'XIU';
+    const rate = total ? Math.max(exact.TAI, exact.XIU) / total : 0;
+    if (total >= 10 && rate >= 0.6) {
+      return { prediction, confidence: rate * 100, reason: `Tong ${previousSum}: ${prediction} (${total} mau)` };
+    }
+  }
+
+  const groupName = previousSum <= 8 ? 'low' : previousSum <= 12 ? 'mid' : 'high';
+  const group = byGroup[groupName];
+  const groupTotal = group.TAI + group.XIU;
+  if (groupTotal >= 20) {
+    const prediction = group.TAI >= group.XIU ? 'TAI' : 'XIU';
+    const rate = Math.max(group.TAI, group.XIU) / groupTotal;
+    if (rate >= 0.58) {
+      return { prediction, confidence: rate * 100, reason: `Nhom ${groupName}: ${prediction} (${groupTotal} mau)` };
+    }
+  }
+
+  return { prediction: fallbackPrediction, confidence: 50, reason: 'Conditional sum chua du mau, dung Markov' };
+}
+
 function buildStrategies(history) {
   const last = lastOutcome(history);
   const outcomes20 = getOutcomes(history, 20);
@@ -105,6 +152,7 @@ function buildStrategies(history) {
   const altRate = getAlternationRate(history);
   const rawStats = getRawStats(history);
   const antiPhasePrediction = rawStats.anti_tai >= rawStats.anti_xiu ? 'TAI' : 'XIU';
+  const conditionalSum = getConditionalSumPrediction(history, markov);
 
   const strategies = [
     makeStrategy('FOLLOW_LAST', last, 50 + Math.abs(pTai12 - 0.5) * 20, 'Theo ket qua gan nhat'),
@@ -144,6 +192,12 @@ function buildStrategies(history) {
       pTai12 >= 0.58 ? 'TAI' : pTai12 <= 0.42 ? 'XIU' : last,
       50 + Math.abs(pTai12 - 0.5) * 30,
       `Hot/Cold 12: ${Math.round(pTai12 * 100)}% TAI`
+    ),
+    makeStrategy(
+      'CONDITIONAL_SUM',
+      conditionalSum.prediction,
+      conditionalSum.confidence,
+      conditionalSum.reason
     ),
     makeStrategy('MARKOV_TRANSITION', markov, 52, `Markov ${markov}`),
     makeStrategy(
