@@ -1,3 +1,5 @@
+const expandedCauBank = require('./expanded-cau-bank');
+
 const STRATEGY_NAMES = [
   'FOLLOW_LAST',
   'REVERSE_LAST',
@@ -8,6 +10,9 @@ const STRATEGY_NAMES = [
   'BIAS_MOMENTUM',
   'HOT_COLD',
   'CONDITIONAL_SUM',
+  'PATTERN_CYCLE',
+  'EXPANDED_CAU_BANK',
+  'LEGACY_MODULES',
   'MARKOV_TRANSITION',
   'ANTI_RAW',
   'RANDOM_BALANCED_FALLBACK',
@@ -20,6 +25,37 @@ function opposite(outcome) {
   return outcome === 'TAI' ? 'XIU' : 'TAI';
 }
 
+
+function getLegacyPrediction(history, legacyContext) {
+  const modules = legacyContext?.modules || [];
+  const names = legacyContext?.moduleNames || [];
+  const getWeight = legacyContext?.getModuleWeight || (() => 1);
+  const scores = { TAI: 0, XIU: 0 };
+  const signals = [];
+  const reasons = [];
+  for (let index = 0; index < modules.length; index++) {
+    try {
+      const result = modules[index].analyze(history);
+      if (!result || !['TAI', 'XIU'].includes(result.pred)) continue;
+      const score = Number(result.score) || 0;
+      scores[result.pred] += score * getWeight(names[index]);
+      signals.push({ name: names[index], pred: result.pred });
+      if (result.reason) reasons.push(result.reason);
+    } catch {}
+  }
+  if (scores.TAI === 0 && scores.XIU === 0) {
+    return { prediction: fallback(history), confidence: 50, reason: 'Legacy modules chua co tin hieu', signals };
+  }
+  const prediction = scores.TAI >= scores.XIU ? 'TAI' : 'XIU';
+  const total = scores.TAI + scores.XIU;
+  const confidence = total ? 50 + Math.min(25, Math.abs(scores.TAI - scores.XIU) / total * 25) : 50;
+  return {
+    prediction,
+    confidence,
+    reason: `Legacy modules ${signals.length}/${modules.length} | ${reasons.slice(0, 2).join(' | ')}`,
+    signals,
+  };
+}
 function fallback(history) {
   return history.length % 2 === 0 ? 'TAI' : 'XIU';
 }
@@ -71,6 +107,36 @@ function getAlternationRate(history) {
     if (outcomes[i] !== outcomes[i - 1]) switches++;
   }
   return switches / (outcomes.length - 1);
+}
+
+function detectRecentCycle(history) {
+  const outcomes = getOutcomes(history, 40);
+  if (outcomes.length < 6) return null;
+  let best = null;
+  for (let period = 2; period <= Math.min(12, Math.floor(outcomes.length / 2)); period++) {
+    const start = outcomes.length - period * 2;
+    const first = outcomes.slice(start, start + period);
+    const second = outcomes.slice(start + period);
+    if (second.length !== period || first.some((value, index) => value !== second[index])) continue;
+    const prediction = first[0];
+    let repeated = 2;
+    for (let offset = start - period; offset >= 0; offset -= period) {
+      const block = outcomes.slice(offset, offset + period);
+      if (block.length !== period || block.some((value, index) => value !== first[index])) break;
+      repeated++;
+    }
+    const candidate = {
+      prediction,
+      period,
+      repeated,
+      confidence: Math.min(78, 58 + repeated * 5),
+      reason: `Chu ky ${period} x${repeated}`,
+    };
+    if (!best || candidate.repeated > best.repeated || (candidate.repeated === best.repeated && candidate.period > best.period)) {
+      best = candidate;
+    }
+  }
+  return best;
 }
 
 function getRawStats(history, window = 20) {
@@ -139,7 +205,7 @@ function getConditionalSumPrediction(history, fallbackPrediction) {
   return { prediction: fallbackPrediction, confidence: 50, reason: 'Conditional sum chua du mau, dung Markov' };
 }
 
-function buildStrategies(history) {
+function buildStrategies(history, legacyContext = {}) {
   const last = lastOutcome(history);
   const outcomes20 = getOutcomes(history, 20);
   const outcomes12 = getOutcomes(history, 12);
@@ -153,6 +219,9 @@ function buildStrategies(history) {
   const rawStats = getRawStats(history);
   const antiPhasePrediction = rawStats.anti_tai >= rawStats.anti_xiu ? 'TAI' : 'XIU';
   const conditionalSum = getConditionalSumPrediction(history, markov);
+  const recentCycle = detectRecentCycle(history);
+  const expanded = expandedCauBank.analyze(history);
+  const legacy = getLegacyPrediction(history, legacyContext);
 
   const strategies = [
     makeStrategy('FOLLOW_LAST', last, 50 + Math.abs(pTai12 - 0.5) * 20, 'Theo ket qua gan nhat'),
@@ -199,6 +268,19 @@ function buildStrategies(history) {
       conditionalSum.confidence,
       conditionalSum.reason
     ),
+    makeStrategy(
+      'PATTERN_CYCLE',
+      recentCycle ? recentCycle.prediction : markov,
+      recentCycle ? recentCycle.confidence : 50,
+      recentCycle ? recentCycle.reason : 'Khong co chu ky lap du manh, dung Markov'
+    ),
+    makeStrategy(
+      'EXPANDED_CAU_BANK',
+      expanded.pred || markov,
+      expanded.pred ? 55 : 50,
+      expanded.reason || 'Bank cau mo rong fallback Markov'
+    ),
+    makeStrategy('LEGACY_MODULES', legacy.prediction, legacy.confidence, legacy.reason),
     makeStrategy('MARKOV_TRANSITION', markov, 52, `Markov ${markov}`),
     makeStrategy(
       'ANTI_RAW',
@@ -215,7 +297,7 @@ function buildStrategies(history) {
     ),
   ];
 
-  return { strategies, rawStats };
+  return { strategies, rawStats, legacy };
 }
 
 function getStrategyStats(logs, strategyName, window) {
@@ -367,8 +449,8 @@ function getConfidence(championStats, recovery, reverse) {
   return { model_confidence: Math.round(model), display_confidence: Math.round(display), status };
 }
 
-function analyze(history, state = {}) {
-  const { strategies, rawStats } = buildStrategies(history);
+function analyze(history, state = {}, legacyContext = {}) {
+  const { strategies, rawStats, legacy } = buildStrategies(history, legacyContext);
   const recovery = getRecoveryMode(history);
   const reverse = getReverseMode(history);
   const champion = selectChampionStrategy(history, state.champion, recovery.enabled);
@@ -406,6 +488,7 @@ function analyze(history, state = {}) {
     reverse_win_rate: reverse.reverse.win_rate,
     loss_streak: recovery.lossStreak,
     raw_prediction: normalPrediction,
+    signals: legacy.signals,
   };
 }
 

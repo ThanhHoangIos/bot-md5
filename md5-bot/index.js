@@ -236,7 +236,7 @@ function ensemblePredict(h) {
             strategyPredictions: {},
         };
     }
-    const prediction = strategyEngine.analyze(h, strategyState);
+    const prediction = strategyEngine.analyze(h, strategyState, { modules, moduleNames, getModuleWeight });
     strategyState.champion = prediction.champion_strategy;
     return prediction;
 }

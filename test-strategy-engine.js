@@ -30,6 +30,15 @@ for (let index = 0; index < 12; index++) {
 const conditional = engine.analyze(conditionalHistory, {});
 assert.strictEqual(conditional.strategyPredictions.CONDITIONAL_SUM, 'TAI');
 
+const cycleHistory = ['TAI', 'XIU', 'TAI', 'XIU', 'TAI', 'XIU', 'TAI', 'XIU'].map(outcome => ({ outcome }));
+const cycle = engine.analyze(cycleHistory, {});
+assert.strictEqual(cycle.strategyPredictions.PATTERN_CYCLE, 'TAI');
+
+const doubleRunHistory = ['TAI', 'TAI', 'XIU', 'XIU', 'TAI', 'TAI', 'XIU', 'XIU'].map(outcome => ({ outcome }));
+const doubleRun = engine.analyze(doubleRunHistory, {});
+assert.strictEqual(doubleRun.strategyPredictions.PATTERN_CYCLE, 'TAI');
+assert.ok(doubleRun.strategyPredictions.EXPANDED_CAU_BANK === 'TAI' || doubleRun.strategyPredictions.EXPANDED_CAU_BANK === 'XIU');
+
 const losses = historyFrom(Array.from({ length: 20 }, () => 'TAI'), 'XIU');
 const recovery = engine.analyze(losses, {});
 assert.strictEqual(recovery.recovery_mode, true);
