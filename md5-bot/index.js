@@ -21,6 +21,7 @@ const skipGram = require('./modules/skip-gram');
 const smartBreakV2 = require('./modules/smart-break-v2');
 const patternEngine = require('./modules/pattern-engine');
 const advancedTotalPattern = require('./modules/advanced-total-pattern');
+const dicePredictionV3 = require('./modules/dice-prediction-v3');
 
 // ===== CẤU HÌNH =====
 const TOKEN = process.env.MD5_API_TOKEN || 'skooN9TKlxJGxgSVRzGShapr6ZBSAyPSdm3g06QugeLZ50dsPLBpQlEj4B+PoU7gBTstsxc74ivQLUaZT8Iam17IkREb7Fn2Br3VwVNQi7qCKtzSMdI4BY3HL9I4VEaWdAVzeZkOxx6qpBbYiNGQbL+32FLTO1yQFoZcgcRwrk7Uerl7XUZ0xA==';
@@ -190,15 +191,35 @@ function formatPrediction(prediction) {
 const baseModules = [aiAdaptive, aiLogitV2, antiBias, beCauPro, cau11Master, cauNganDai, brainAI, deepseekAI, hybridFollowBreak, onlineAIV3, patternAtlas, patternRich, skipGram, smartBreakV2, patternEngine];
 const baseModuleNames = ['adaptive', 'logit', 'antiBias', 'beCau', 'cau11', 'cauNganDai', 'brain', 'deepseek', 'hybrid', 'online', 'atlas', 'rich', 'skipGram', 'smartBreak', 'patternEngine'];
 const advancedTotalModule = { name: 'advancedTotal', analyze: advancedTotalPattern.signal };
-const modules = [...baseModules, advancedTotalModule];
-const moduleNames = [...baseModuleNames, 'advancedTotal'];
+const dicePredictionV3Module = {
+    name: 'dicePredictionV3',
+    analyze(history) {
+        try {
+            const result = dicePredictionV3.predict(history);
+            if (!result || !result.ready || !result.prediction) return null;
+            const pred = String(result.prediction || '').toUpperCase();
+            const normalized = pred === 'TAI' || pred === 'TÀI' ? 'TAI' : (pred === 'XIU' || pred === 'XỈU' ? 'XIU' : null);
+            if (!normalized) return null;
+            const confidence = Number(result.confidence || 50);
+            return {
+                pred: normalized,
+                score: Math.max(0.8, Math.min(5.5, (confidence / 100) * 2.5 + 0.7)),
+                reason: `Dice V3: ${result.predictedTotal ?? '?'} | ${result.prediction} (${confidence}%)`,
+            };
+        } catch (e) {
+            return null;
+        }
+    }
+};
+const modules = [...baseModules, advancedTotalModule, dicePredictionV3Module];
+const moduleNames = [...baseModuleNames, 'advancedTotal', 'dicePredictionV3'];
 const modulePerformance = {};
 
 function getModuleWeight(name) {
     const performance = modulePerformance[name] || { hits: 0, misses: 0 };
     const total = performance.hits + performance.misses;
     const accuracy = total ? performance.hits / total : 0.5;
-    const base = name === 'advancedTotal' ? 1.45 : 1.0;
+    const base = name === 'advancedTotal' ? 1.45 : (name === 'dicePredictionV3' ? 1.25 : 1.0);
     return Math.max(0.6, Math.min(1.9, base + (accuracy - 0.5) * 1.2));
 }
 
