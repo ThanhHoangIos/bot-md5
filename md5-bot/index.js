@@ -24,7 +24,7 @@ const advancedTotalPattern = require('./modules/advanced-total-pattern');
 const dicePredictionV3 = require('./modules/dice-prediction-v3');
 
 // ===== CẤU HÌNH =====
-const TOKEN = process.env.MD5_API_TOKEN || 'skooN9TKlxJGxgSVRzGShapr6ZBSAyPSdm3g06QugeLZ50dsPLBpQlEj4B+PoU7gBTstsxc74ivQLUaZT8Iam17IkREb7Fn2Br3VwVNQi7qCKtzSMdI4BY3HL9I4VEaWdAVzeZkOxx6qpBbYiNGQbL+32FLTO1yQFoZcgcRwrk7Uerl7XUZ0xA==';
+const TOKEN = process.env.MD5_API_TOKEN || 'VBHavIu4uTRXaDW371DSN2Re38ZDEg0mdm3g06QugeLZ50dsPLBpQlEj4B+PoU7gBTstsxc74ivQLUaZT8Iam17IkREb7Fn2UjQLXu0h0nVcBKp97L9e1C3wP2yKxHqnMMLJ24HkoHjUt3AK4qsbv3pUON6khMT8FoZcgcRwrk7Uerl7XUZ0xA==';
 const API_URL = 'https://md5.changdelamgica.xyz/api/GetListSoiCau';
 const PORT = process.env.PORT || 3000;
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://mkcrlfgpncryalmmixsr.supabase.co';
